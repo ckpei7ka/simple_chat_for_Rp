@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Групповой Чат Ролевой Игры</title>
+    <title>Чат Околонастолья - Chronicles of Darkness </title>
     <link rel="stylesheet" href="style.css">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#2c1810">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
@@ -13,22 +13,26 @@
     <div id="app">
         <div id="login-modal" class="modal">
             <div class="modal-content">
-                <h2>Вход в чат</h2>
+                <div class="cod-header">
+                    <div class="cod-logo">🌙</div>
+                    <h2>Околонастолье - Chronicles of Darkness</h2>
+                    <p class="cod-subtitle">Войди</p>
+                </div>
                 <form id="login-form">
                     <div class="form-group">
                         <label for="character-name">Имя персонажа:</label>
-                        <input type="text" id="character-name" required>
+                        <input type="text" id="character-name" required placeholder="Введите имя вашего персонажа">
                     </div>
                     <div class="form-group">
                         <label for="character-description">Описание персонажа:</label>
-                        <textarea id="character-description" rows="3"></textarea>
+                        <textarea id="character-description" rows="3" placeholder="Опишите вашего персонажа..."></textarea>
                     </div>
                     <div class="form-group">
                         <label for="avatar-upload">Аватар персонажа:</label>
                         <input type="file" id="avatar-upload" accept="image/*">
                         <div id="avatar-preview" class="avatar-preview"></div>
                     </div>
-                    <button type="submit">Войти в чат</button>
+                    <button type="submit" class="cod-btn-primary">Войти</button>
                 </form>
             </div>
         </div>
@@ -36,21 +40,26 @@
         <div id="chat-interface" class="hidden">
             <div class="mobile-header">
                 <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
-                <div class="mobile-title">Чат РПГ</div>
+                <div class="mobile-title">Околонастолье - Chronicles of Darkness</div>
                 <button class="mobile-users-btn" id="mobile-users-btn">👥</button>
             </div>
 
             <div id="sidebar">
+                <div class="cod-sidebar-header">
+                    <div class="cod-logo-small">🌙</div>
+                    <span>Околонастолье - Chronicles of Darkness</span>
+                </div>
                 <div id="user-profile">
                     <img id="user-avatar" src="" alt="Аватар">
                     <h3 id="user-name"></h3>
+                    <div id="user-description" class="user-description"></div>
                     <div class="profile-buttons">
-                        <button id="edit-profile-btn">Редактировать профиль</button>
-                        <button id="logout-btn">Выйти</button>
+                        <button id="edit-profile-btn" class="cod-btn-secondary">Редактировать профиль</button>
+                        <button id="logout-btn" class="cod-btn-danger">Покинуть</button>
                     </div>
                 </div>
                 <div id="users-list">
-                    <h4>Участники:</h4>
+                    <h4>Онлайн:</h4>
                     <div id="users-container"></div>
                 </div>
             </div>
@@ -64,23 +73,30 @@
                     <div class="input-actions">
                         <div id="file-upload-area">
                             <input type="file" id="file-input" multiple>
-                            <button id="upload-btn" title="Прикрепить файл">📎</button>
+                            <button id="upload-btn" title="Прикрепить файл" class="cod-btn-icon">📎</button>
                         </div>
-                        <button id="dice-roll-btn" title="Бросить кубики">🎲</button>
+                        <button id="dice-roll-btn" title="Бросить кубики" class="cod-btn-icon">🎲</button>
                     </div>
-                    <input type="text" id="message-input" placeholder="Введите сообщение...">
-                    <button id="send-btn">Отправить</button>
+                    <input type="text" id="message-input" placeholder="Шепот в темноте...">
+                    <button id="send-btn" class="cod-btn-primary">Отправить</button>
                 </div>
             </div>
         </div>
 
         <div id="user-profile-modal" class="modal hidden">
-            <div class="profile-modal-content">
+            <div class="profile-modal-content cod-modal">
+                <div class="cod-modal-header">
+                    <div class="cod-logo">🌙</div>
+                    <h3>Профиль</h3>
+                </div>
                 <img id="profile-modal-avatar" src="" alt="Аватар" class="profile-modal-avatar">
                 <h2 id="profile-modal-name" class="profile-modal-name"></h2>
                 <div id="profile-modal-storyteller" class="profile-modal-storyteller hidden">Рассказчик</div>
-                <p id="profile-modal-description" class="profile-modal-description"></p>
-                <button id="profile-modal-close" class="profile-modal-close">Закрыть</button>
+                <div class="profile-section">
+                    <h4>Описание:</h4>
+                    <p id="profile-modal-description" class="profile-modal-description"></p>
+                </div>
+                <button id="profile-modal-close" class="cod-btn-secondary">Закрыть</button>
             </div>
         </div>
     </div>
