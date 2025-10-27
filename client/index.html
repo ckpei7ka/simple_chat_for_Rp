@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Групповой Чат Ролевой Игры</title>
+    <link rel="stylesheet" href="style.css">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+    <div id="app">
+        <div id="login-modal" class="modal">
+            <div class="modal-content">
+                <h2>Вход в чат</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="character-name">Имя персонажа:</label>
+                        <input type="text" id="character-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="character-description">Описание персонажа:</label>
+                        <textarea id="character-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="avatar-upload">Аватар персонажа:</label>
+                        <input type="file" id="avatar-upload" accept="image/*">
+                        <div id="avatar-preview" class="avatar-preview"></div>
+                    </div>
+                    <button type="submit">Войти в чат</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="chat-interface" class="hidden">
+            <div class="mobile-header">
+                <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+                <div class="mobile-title">Чат РПГ</div>
+                <button class="mobile-users-btn" id="mobile-users-btn">👥</button>
+            </div>
+
+            <div id="sidebar">
+                <div id="user-profile">
+                    <img id="user-avatar" src="" alt="Аватар">
+                    <h3 id="user-name"></h3>
+                    <div class="profile-buttons">
+                        <button id="edit-profile-btn">Редактировать профиль</button>
+                        <button id="logout-btn">Выйти</button>
+                    </div>
+                </div>
+                <div id="users-list">
+                    <h4>Участники:</h4>
+                    <div id="users-container"></div>
+                </div>
+            </div>
+
+            <div id="main-chat">
+                <div id="chat-container">
+                    <div id="messages-container"></div>
+                </div>
+
+                <div id="input-panel">
+                    <div class="input-actions">
+                        <div id="file-upload-area">
+                            <input type="file" id="file-input" multiple>
+                            <button id="upload-btn" title="Прикрепить файл">📎</button>
+                        </div>
+                        <button id="dice-roll-btn" title="Бросить кубики">🎲</button>
+                    </div>
+                    <input type="text" id="message-input" placeholder="Введите сообщение...">
+                    <button id="send-btn">Отправить</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="user-profile-modal" class="modal hidden">
+            <div class="profile-modal-content">
+                <img id="profile-modal-avatar" src="" alt="Аватар" class="profile-modal-avatar">
+                <h2 id="profile-modal-name" class="profile-modal-name"></h2>
+                <div id="profile-modal-storyteller" class="profile-modal-storyteller hidden">Рассказчик</div>
+                <p id="profile-modal-description" class="profile-modal-description"></p>
+                <button id="profile-modal-close" class="profile-modal-close">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
