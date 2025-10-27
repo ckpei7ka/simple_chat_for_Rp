@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Чат Околонастолья - Chronicles of Darkness </title>
+    <title>Chronicles of Darkness - RPG Chat</title>
     <link rel="stylesheet" href="style.css">
     <meta name="theme-color" content="#2c1810">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,8 +15,8 @@
             <div class="modal-content">
                 <div class="cod-header">
                     <div class="cod-logo">🌙</div>
-                    <h2>Околонастолье - Chronicles of Darkness</h2>
-                    <p class="cod-subtitle">Войди</p>
+                    <h2>Chronicles of Darkness</h2>
+                    <p class="cod-subtitle">Войди в Тень</p>
                 </div>
                 <form id="login-form">
                     <div class="form-group">
@@ -32,7 +32,7 @@
                         <input type="file" id="avatar-upload" accept="image/*">
                         <div id="avatar-preview" class="avatar-preview"></div>
                     </div>
-                    <button type="submit" class="cod-btn-primary">Войти</button>
+                    <button type="submit" class="cod-btn-primary">Войти в Тень</button>
                 </form>
             </div>
         </div>
@@ -40,26 +40,44 @@
         <div id="chat-interface" class="hidden">
             <div class="mobile-header">
                 <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
-                <div class="mobile-title">Околонастолье - Chronicles of Darkness</div>
+                <div class="mobile-title">Chronicles of Darkness</div>
                 <button class="mobile-users-btn" id="mobile-users-btn">👥</button>
             </div>
 
             <div id="sidebar">
                 <div class="cod-sidebar-header">
                     <div class="cod-logo-small">🌙</div>
-                    <span>Околонастолье - Chronicles of Darkness</span>
+                    <span>Chronicles of Darkness</span>
                 </div>
+
                 <div id="user-profile">
                     <img id="user-avatar" src="" alt="Аватар">
                     <h3 id="user-name"></h3>
-                    <div id="user-description" class="user-description"></div>
                     <div class="profile-buttons">
                         <button id="edit-profile-btn" class="cod-btn-secondary">Редактировать профиль</button>
-                        <button id="logout-btn" class="cod-btn-danger">Покинуть</button>
+                        <button id="logout-btn" class="cod-btn-danger">Покинуть Тень</button>
                     </div>
                 </div>
+
+                <div id="storyteller-controls" class="storyteller-controls hidden">
+                    <div class="storyteller-header">
+                        <h4>Управление Рассказчика</h4>
+                    </div>
+                    <div class="sender-selector">
+                        <label for="message-sender">Отправитель:</label>
+                        <select id="message-sender">
+                            <option value="self">От моего имени</option>
+                            <option value="anonymous">Без имени</option>
+                            <option value="other">От другого имени</option>
+                        </select>
+                    </div>
+                    <div id="custom-sender-container" class="custom-sender-container">
+                        <input type="text" id="custom-sender" placeholder="Выберите 'От другого имени'" disabled>
+                    </div>
+                </div>
+
                 <div id="users-list">
-                    <h4>Онлайн:</h4>
+                    <h4>Обитатели Тени:</h4>
                     <div id="users-container"></div>
                 </div>
             </div>
@@ -87,7 +105,7 @@
             <div class="profile-modal-content cod-modal">
                 <div class="cod-modal-header">
                     <div class="cod-logo">🌙</div>
-                    <h3>Профиль</h3>
+                    <h3>Профиль Обитателя Тени</h3>
                 </div>
                 <img id="profile-modal-avatar" src="" alt="Аватар" class="profile-modal-avatar">
                 <h2 id="profile-modal-name" class="profile-modal-name"></h2>

@@ -124,8 +124,8 @@ function rollDice(numberOfDice) {
     initial: results,
     extra: extraRolls,
     totalSuccesses: initialSuccesses + extraSuccesses,
-    initialSuccesses: initialSuccesses, // Добавлено
-    extraSuccesses: extraSuccesses      // Добавлено
+    initialSuccesses: initialSuccesses,
+    extraSuccesses: extraSuccesses
   };
 }
 
@@ -138,13 +138,40 @@ io.on('connection', (socket) => {
 
   const getUser = () => users.get(socket.id);
   
-  const createMessage = (type, data = {}) => ({
-    id: Date.now().toString(),
-    user: { name: getUser().name, avatar: getUser().avatar },
-    timestamp: new Date().toISOString(),
-    type,
-    ...data
-  });
+  const createMessage = (type, data = {}) => {
+    const user = getUser();
+    const messageData = {
+      id: Date.now().toString(),
+      user: {
+        name: user.name,
+        avatar: user.avatar,
+        id: socket.id
+      },
+      timestamp: new Date().toISOString(),
+      type,
+      canEdit: user.isStoryteller || socket.id === user.id,
+      ...data
+    };
+
+    // Обработка типа отправителя для Рассказчика
+    if (data.senderType === 'anonymous') {
+      // Для анонимных сообщений скрываем информацию об отправителе
+      messageData.user = {
+        name: '',
+        avatar: '',
+        id: socket.id
+      };
+    } else if (data.senderType === 'other' && data.customSender) {
+      // Для сообщений от другого имени подменяем отправителя
+      messageData.user = {
+        name: data.customSender,
+        avatar: '/uploads/default-avatar.png',
+        id: socket.id
+      };
+    }
+
+    return messageData;
+  };
 
   socket.on('user-join', (userData) => {
     const characterName = userData.name;
@@ -176,7 +203,8 @@ io.on('connection', (socket) => {
 
     const message = createMessage('message', {
       text: messageData.text,
-      canEdit: user.isStoryteller || socket.id === user.id
+      senderType: messageData.senderType || 'self',
+      customSender: messageData.customSender || ''
     });
 
     chatHistory.push(message);

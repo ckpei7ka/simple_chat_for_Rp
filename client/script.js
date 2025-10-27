@@ -8,6 +8,9 @@ class ChatApp {
         this.isConnected = false;
         this.eventListeners = new Map();
         this.scrollButton = null;
+        this.isStoryteller = false;
+        this.messageSender = 'self';
+        this.customSenderName = '';
         this.initializeApp();
     }
 
@@ -162,12 +165,28 @@ class ChatApp {
             'file-input': (e) => this.handleFileUpload(e.target.files[0]),
             'edit-profile-btn': () => this.editProfile(),
             'logout-btn': () => this.logout(),
-            'dice-roll-btn': () => this.rollDice()
+            'dice-roll-btn': () => this.rollDice(),
+            'message-sender': (e) => this.handleSenderChange(e.target.value)
         };
 
         Object.entries(chatHandlers).forEach(([id, handler]) => {
-            this.addChatEventListener(id, id === 'message-input' ? 'keypress' : 'click', handler);
+            const eventType = id === 'message-input' ? 'keypress' : 
+                            id === 'message-sender' ? 'change' : 'click';
+            this.addChatEventListener(id, eventType, handler);
         });
+
+        // Особый случай для custom-sender
+        const customSender = document.getElementById('custom-sender');
+        if (customSender) {
+            customSender.addEventListener('input', (e) => {
+                this.customSenderName = e.target.value.trim();
+            });
+            customSender.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendMessage();
+                }
+            });
+        }
 
         this.setupChatContainer();
     }
@@ -186,7 +205,8 @@ class ChatApp {
     removeChatEventListeners() {
         const chatElements = [
             'send-btn', 'message-input', 'upload-btn', 'file-input',
-            'edit-profile-btn', 'logout-btn', 'dice-roll-btn', 'chat-container'
+            'edit-profile-btn', 'logout-btn', 'dice-roll-btn', 'chat-container',
+            'message-sender', 'custom-sender'
         ];
 
         chatElements.forEach(elementId => {
@@ -330,6 +350,16 @@ class ChatApp {
         this.socket.on('connect', () => {
             this.isConnected = true;
             this.socket.emit('user-join', this.currentUser);
+            
+            if (this.currentUser.isStoryteller) {
+                this.showStorytellerControls();
+                // Инициализируем поле как disabled
+                const customSender = document.getElementById('custom-sender');
+                if (customSender) {
+                    customSender.disabled = true;
+                    customSender.placeholder = "Выберите 'От другого имени'";
+                }
+            }
         });
     }
 
@@ -377,6 +407,44 @@ class ChatApp {
         Object.entries(handlers).forEach(([event, handler]) => {
             this.socket.on(event, handler);
         });
+    }
+
+    handleSenderChange(senderType) {
+        this.messageSender = senderType;
+        const customSender = document.getElementById('custom-sender');
+        
+        if (senderType === 'other') {
+            customSender.disabled = false;
+            customSender.placeholder = "Введите имя отправителя...";
+            customSender.focus();
+        } else {
+            customSender.disabled = true;
+            customSender.value = '';
+            customSender.placeholder = "Выберите 'От другого имени'";
+        }
+        
+        this.updateMessageInputPlaceholder();
+    }
+
+    updateMessageInputPlaceholder() {
+        const input = document.getElementById('message-input');
+        switch (this.messageSender) {
+            case 'anonymous':
+                input.placeholder = 'Опишите ситуацию или окружение...';
+                break;
+            case 'other':
+                input.placeholder = 'Сообщение от другого имени...';
+                break;
+            default:
+                input.placeholder = 'Шепот в темноте...';
+        }
+    }
+
+    showStorytellerControls() {
+        const controls = document.getElementById('storyteller-controls');
+        controls.classList.remove('hidden');
+        this.isStoryteller = true;
+        this.updateMessageInputPlaceholder();
     }
 
     handleAvatarUpload(file) {
@@ -429,7 +497,27 @@ class ChatApp {
         const text = input.value.trim();
         
         if (text) {
-            this.socket.emit('send-message', { text });
+            // Валидация для отправки от другого имени
+            if (this.messageSender === 'other') {
+                const customSender = document.getElementById('custom-sender');
+                const senderName = customSender.value.trim();
+                
+                if (!senderName) {
+                    alert('Пожалуйста, введите имя отправителя');
+                    customSender.focus();
+                    return;
+                }
+                
+                this.customSenderName = senderName;
+            }
+            
+            const messageData = {
+                text: text,
+                senderType: this.messageSender,
+                customSender: this.customSenderName
+            };
+            
+            this.socket.emit('send-message', messageData);
             input.value = '';
             
             if (this.isMobile) {
@@ -529,7 +617,7 @@ class ChatApp {
         if (!container) return;
 
         const messageElement = document.createElement('div');
-        messageElement.className = `message ${message.type === 'file' ? 'file-message' : ''} ${message.type === 'dice' ? 'dice-message' : ''}`;
+        messageElement.className = `message ${this.getMessageClasses(message)}`;
         messageElement.id = `message-${message.id}`;
         
         const time = new Date(message.timestamp).toLocaleTimeString();
@@ -545,12 +633,40 @@ class ChatApp {
         container.appendChild(messageElement);
     }
 
+    getMessageClasses(message) {
+        const classes = [];
+        if (message.type === 'file') classes.push('file-message');
+        if (message.type === 'dice') classes.push('dice-message');
+        if (message.senderType === 'anonymous') classes.push('anonymous');
+        if (message.senderType === 'other') classes.push('other-sender');
+        return classes.join(' ');
+    }
+
     createFileMessageHTML(message, time) {
+        const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
+        
+        // Для сообщений от другого имени убираем аватарку
+        if (message.senderType === 'other') {
+            return `
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-user other-sender-name">${displayName}</span>
+                        <span class="message-time">${time}</span>
+                        ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'\')">✏️</button>' : ''}
+                    </div>
+                    <div class="message-text">
+                        📎 <a href="${message.file.url}" class="file-link" target="_blank">${message.file.originalName}</a>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Обычное сообщение с аватаркой
         return `
-            <img src="${message.user.avatar}" alt="${message.user.name}" class="message-avatar">
+            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
-                    <span class="message-user">${message.user.name}</span>
+                    <span class="message-user">${displayName}</span>
                     <span class="message-time">${time}</span>
                     ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'\')">✏️</button>' : ''}
                 </div>
@@ -565,11 +681,48 @@ class ChatApp {
         const roll = message.rollResult;
         const successClass = roll.totalSuccesses >= 5 ? 'dice-success' : roll.totalSuccesses >= 3 ? 'dice-good' : 'dice-fail';
         
+        const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
+        
+        // Для сообщений от другого имени убираем аватарку
+        if (message.senderType === 'other') {
+            return `
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-user other-sender-name">${displayName}</span>
+                        <span class="message-time">${time}</span>
+                    </div>
+                    <div class="dice-roll ${successClass}">
+                        <div class="dice-header">
+                            🎲 Бросок ${message.diceCount}d10
+                            <span class="success-count">Успехов: ${roll.totalSuccesses}</span>
+                        </div>
+                        <div class="dice-results">
+                            <div class="dice-set">
+                                <strong>Основные кубики:</strong>
+                                ${roll.initial.map(r => `<span class="dice ${r >= 8 ? 'success' : r === 10 ? 'explode' : ''}">${r}</span>`).join('')}
+                            </div>
+                            ${roll.extra.length > 0 ? `
+                            <div class="dice-set">
+                                <strong>Дополнительные (за 10):</strong>
+                                ${roll.extra.map(r => `<span class="dice ${r >= 8 ? 'success' : r === 10 ? 'explode' : ''}">${r}</span>`).join('')}
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div class="dice-summary">
+                            Всего успехов: ${roll.totalSuccesses} 
+                            (${roll.initialSuccesses} основных + ${roll.extraSuccesses} дополнительных)
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Обычное сообщение с аватаркой
         return `
-            <img src="${message.user.avatar}" alt="${message.user.name}" class="message-avatar">
+            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
-                    <span class="message-user">${message.user.name}</span>
+                    <span class="message-user">${displayName}</span>
                     <span class="message-time">${time}</span>
                 </div>
                 <div class="dice-roll ${successClass}">
@@ -600,11 +753,42 @@ class ChatApp {
 
     createTextMessageHTML(message, time) {
         const editedInfo = message.edited ? `<span class="edited-info">(ред.)</span>` : '';
+        
+        if (message.senderType === 'anonymous') {
+            return `
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-time">${time} ${editedInfo}</span>
+                    </div>
+                    <div class="message-text" style="font-style: italic; text-align: center;">
+                        ${this.escapeHtml(message.text)}
+                    </div>
+                </div>
+            `;
+        }
+        
+        const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
+        
+        // Для сообщений от другого имени убираем аватарку
+        if (message.senderType === 'other') {
+            return `
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-user other-sender-name">${displayName}</span>
+                        <span class="message-time">${time} ${editedInfo}</span>
+                        ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'' + this.escapeHtml(message.text) + '\')">✏️</button>' : ''}
+                    </div>
+                    <div class="message-text">${this.escapeHtml(message.text)}</div>
+                </div>
+            `;
+        }
+        
+        // Обычное сообщение с аватаркой
         return `
-            <img src="${message.user.avatar}" alt="${message.user.name}" class="message-avatar">
+            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
-                    <span class="message-user">${message.user.name}</span>
+                    <span class="message-user">${displayName}</span>
                     <span class="message-time">${time} ${editedInfo}</span>
                     ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'' + this.escapeHtml(message.text) + '\')">✏️</button>' : ''}
                 </div>
@@ -635,12 +819,10 @@ class ChatApp {
         if (!container) return;
 
         const messageElement = document.createElement('div');
-        messageElement.className = 'message';
-        messageElement.style.background = '#fff3cd';
-        messageElement.style.borderLeftColor = '#ffc107';
+        messageElement.className = 'message system-message';
         messageElement.innerHTML = `
             <div class="message-content">
-                <div class="message-text" style="text-align: center; color: #856404; font-style: italic;">
+                <div class="message-text" style="text-align: center; color: var(--cod-text-secondary); font-style: italic;">
                     ${text}
                 </div>
             </div>
@@ -727,11 +909,27 @@ class ChatApp {
             localStorage.removeItem('chatUser');
             this.currentUser = null;
             this.isConnected = false;
+            this.isStoryteller = false;
+            this.messageSender = 'self';
+            this.customSenderName = '';
             
             this.removeEventListeners();
             
             document.getElementById('chat-interface').classList.add('hidden');
             document.getElementById('login-modal').classList.remove('hidden');
+            
+            const controls = document.getElementById('storyteller-controls');
+            if (controls) controls.classList.add('hidden');
+            
+            const customSender = document.getElementById('custom-sender');
+            if (customSender) {
+                customSender.value = '';
+                customSender.disabled = true;
+                customSender.placeholder = "Выберите 'От другого имени'";
+            }
+            
+            const senderSelect = document.getElementById('message-sender');
+            if (senderSelect) senderSelect.value = 'self';
             
             document.getElementById('login-form').reset();
             document.getElementById('avatar-preview').innerHTML = '';

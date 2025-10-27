@@ -294,22 +294,102 @@ body {
 }
 
 #user-name {
-    margin-bottom: 0.5rem;
+    margin-bottom: 1rem;
     color: var(--cod-text-primary);
     font-size: 1.2rem;
-}
-
-.user-description {
-    color: var(--cod-text-secondary);
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    font-style: italic;
 }
 
 .profile-buttons {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+}
+
+/* Панель управления Рассказчика */
+.storyteller-controls {
+    padding: 1rem;
+    border-bottom: 1px solid var(--cod-border);
+    background: var(--cod-surface-light);
+}
+
+.storyteller-header h4 {
+    color: var(--cod-accent-gold);
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.sender-selector {
+    margin-bottom: 0.5rem;
+}
+
+.sender-selector label {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--cod-text-primary);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+#message-sender {
+    width: 100%;
+    background: var(--cod-bg-darker);
+    border: 1px solid var(--cod-border);
+    border-radius: var(--border-radius-small);
+    padding: 0.5rem;
+    color: var(--cod-text-primary);
+    font-family: inherit;
+    font-size: 0.8rem;
+    transition: var(--transition);
+}
+
+#message-sender:focus {
+    outline: none;
+    border-color: var(--cod-accent-gold);
+}
+
+.custom-sender-container {
+    margin-top: 0.5rem;
+    transition: var(--transition);
+}
+
+#custom-sender {
+    width: 100%;
+    background: var(--cod-bg-darker);
+    border: 1px solid var(--cod-border);
+    border-radius: var(--border-radius-small);
+    padding: 0.5rem;
+    color: var(--cod-text-primary);
+    font-family: inherit;
+    font-size: 0.8rem;
+    transition: var(--transition);
+}
+
+#custom-sender:focus {
+    outline: none;
+    border-color: var(--cod-accent-gold);
+}
+
+#custom-sender::placeholder {
+    color: var(--cod-text-muted);
+    font-size: 0.8rem;
+}
+
+#custom-sender:disabled {
+    background: var(--cod-surface);
+    color: var(--cod-text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+#custom-sender:disabled::placeholder {
+    color: var(--cod-text-muted);
+}
+
+#custom-sender:not(:disabled) {
+    border-color: var(--cod-accent-gold);
+    background: var(--cod-bg-darker);
 }
 
 #users-list {
@@ -526,6 +606,19 @@ body {
 .file-link:hover {
     text-decoration: underline;
     color: var(--cod-text-primary);
+}
+
+/* Сообщения от другого имени - без аватарки */
+.message.other-sender {
+    background: linear-gradient(135deg, var(--cod-surface), var(--cod-accent-blue));
+    border-left-color: var(--cod-accent-blue);
+    padding-left: 1rem;
+}
+
+.message.other-sender .message-user.other-sender-name {
+    color: var(--cod-accent-gold);
+    font-style: italic;
+    font-weight: 600;
 }
 
 /* Броски кубиков */
@@ -887,6 +980,23 @@ body {
         height: 28px;
         font-size: 0.8rem;
     }
+    
+    .storyteller-controls {
+        padding: 0.75rem;
+    }
+    
+    .storyteller-header h4 {
+        font-size: 0.85rem;
+    }
+    
+    #message-sender, #custom-sender {
+        font-size: 0.75rem;
+        padding: 0.4rem;
+    }
+    
+    .message.other-sender {
+        padding-left: 0.75rem;
+    }
 }
 
 @media (max-width: 480px) {
@@ -963,6 +1073,10 @@ body {
     
     .profile-modal-name {
         font-size: 1.3rem;
+    }
+    
+    .message.other-sender {
+        padding-left: 0.5rem;
     }
 }
 
