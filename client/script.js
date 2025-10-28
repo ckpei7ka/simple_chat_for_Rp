@@ -1,3 +1,5 @@
+/* полный файл без изменений логики (панель фиксируется стилями)
+   ─ см. ваш исходный script.js ─ */
 class ChatApp {
     constructor() {
         this.socket = null;
