@@ -162,7 +162,6 @@ class ChatApp {
 
         const chatHandlers = {
             'send-btn': () => this.sendMessage(),
-            'message-input': (e) => e.key === 'Enter' && this.sendMessage(),
             'upload-btn': () => document.getElementById('file-input').click(),
             'file-input': (e) => this.handleFileUpload(e.target.files[0]),
             'edit-profile-btn': () => this.editProfile(),
@@ -191,6 +190,34 @@ class ChatApp {
         }
 
         this.setupChatContainer();
+
+        const ta = document.getElementById('message-input');
+        if (ta) {
+            // Автоподгон высоты при наборе
+            ta.addEventListener('input', () => this.autoResizeMessageInput());
+            // Первичная установка (и после смены placeholder)
+            this.autoResizeMessageInput();
+
+            // Горячие клавиши:
+            ta.addEventListener('keydown', (e) => {
+                // ПК: отправка Ctrl+Enter, обычный Enter — новая строка
+                if (!this.isMobile) {
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                    return; // на ПК Enter без Ctrl не трогаем — даём писать абзацы
+                }
+
+                // Мобильные: Enter отправляет, Shift+Enter — перенос строки
+                if (this.isMobile) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                }
+            });
+        }
     }
 
     addChatEventListener(elementId, event, handler) {
@@ -764,6 +791,7 @@ class ChatApp {
                     </div>
                     <div class="message-text" style="font-style: italic; text-align: center;">
                         ${this.escapeHtml(message.text)}
+                        const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
                     </div>
                 </div>
             `;
@@ -780,7 +808,9 @@ class ChatApp {
                         <span class="message-time">${time} ${editedInfo}</span>
                         ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'' + this.escapeHtml(message.text) + '\')">✏️</button>' : ''}
                     </div>
-                    <div class="message-text">${this.escapeHtml(message.text)}</div>
+                    <div class="message-text">${this.escapeHtml(message.text)}
+                    const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
+                    </div>
                 </div>
             `;
         }
@@ -847,6 +877,13 @@ class ChatApp {
         
         container.innerHTML = '';
         users.forEach(user => this.addUserToList(user));
+    }
+
+    autoResizeMessageInput() {
+        const ta = document.getElementById('message-input');
+        if (!ta) return;
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 320) + 'px'; // 320px ≈ 7–8 строк
     }
 
     addUserToList(user) {

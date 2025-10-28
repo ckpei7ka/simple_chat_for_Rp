@@ -768,13 +768,19 @@ body {
     flex: 1;
     padding: 0.75rem 1rem;
     border: 1px solid var(--cod-border);
-    border-radius: 25px;
+    border-radius: 14px;
     font-size: 1rem;
     min-width: 120px;
     transition: var(--transition);
     background: var(--cod-surface);
     color: var(--cod-text-primary);
     font-family: inherit;
+
+    /* важно для textarea */
+    line-height: 1.4;
+    resize: none;          /* вручную не растягиваем — растим кодом */
+    overflow-y: hidden;    /* скролл не показываем — увеличиваем высоту */
+    max-height: 10.5em;    /* ~7 строк при line-height:1.5, подкорректируйте при желании */
 }
 
 #message-input:focus {
@@ -788,19 +794,21 @@ body {
 }
 
 #send-btn {
-    background: linear-gradient(135deg, var(--cod-accent-blood), #6d1f1f);
-    border-radius: 25px;
-    padding: 0.75rem 1.5rem;
-    font-weight: 600;
-    transition: var(--transition);
-    border: none;
-    color: white;
-    font-family: inherit;
+    flex: 0 0 auto;
+    width: 5.0rem;      /* квадратная форма — регулируй под дизайн */
+    height: 5.0rem;
+    padding: 0;         /* убираем внутренние отступы, чтобы иконка была по центру */
+    border-radius: 50%; /* можно сделать круглой */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;    /* при необходимости уменьшай или увеличивай иконку */
+    line-height: 1;
+    cursor: pointer;
 }
 
 #send-btn:hover {
-    background: linear-gradient(135deg, #9d0000, #5a1515);
-    transform: scale(1.05);
+    background-color: var(--cod-accent-blood);
 }
 
 /* Модальное окно профиля */
