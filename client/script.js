@@ -25,14 +25,13 @@ class ChatApp {
 
     setupGlobalEventListeners() {
         window.addEventListener('resize', this.handleResize.bind(this));
-        
+
         document.addEventListener('click', (e) => {
-            if (this.isMobile && this.sidebarVisible && 
-                !e.target.closest('#sidebar') && 
+            if (this.isMobile && this.sidebarVisible &&
+                !e.target.closest('#sidebar') &&
                 !e.target.closest('.mobile-menu-btn')) {
                 this.hideSidebar();
             }
-
             if (e.target.id === 'user-profile-modal') {
                 this.closeUserProfile();
             }
@@ -49,26 +48,30 @@ class ChatApp {
     }
 
     createScrollButton() {
-        if (this.scrollButton) {
-            this.scrollButton.remove();
-        }
-
+        if (this.scrollButton) this.scrollButton.remove();
         this.scrollButton = document.createElement('button');
         this.scrollButton.id = 'scroll-to-bottom';
-        this.scrollButton.innerHTML = '↓';
-        this.scrollButton.title = 'Прокрутить к новым сообщениям';
-        
-        this.scrollButton.addEventListener('click', () => {
-            this.scrollToBottom(true);
-        });
-
+        this.scrollButton.innerText = '⬇️';
+        this.scrollButton.style.display = 'none';
+        this.scrollButton.className = 'scroll-to-bottom-button';
+        this.scrollButton.addEventListener('click', () => this.scrollToBottom(true));
         document.body.appendChild(this.scrollButton);
     }
+
+    scrollToBottom(force = false) {
+        const container = document.getElementById('chat-container');
+        if (!container) return;
+        const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (force || distance < 150) {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        }
+        if (this.scrollButton) this.scrollButton.style.display = 'none';
+    }
+
 
     handleResize() {
         const wasMobile = this.isMobile;
         this.isMobile = window.innerWidth <= 768;
-        
         if (wasMobile !== this.isMobile) {
             this.isMobile ? this.optimizeForMobile() : this.optimizeForDesktop();
         }
@@ -83,9 +86,35 @@ class ChatApp {
     optimizeForDesktop() {
         const mobileUsersBtn = document.getElementById('mobile-users-btn');
         if (mobileUsersBtn) mobileUsersBtn.style.display = 'block';
-        
         const chatContainer = document.getElementById('chat-container');
         if (chatContainer) chatContainer.style.height = '';
+    }
+
+    setupMessageInputListeners() {
+        const input = document.getElementById('message-input');
+        if (!input) return;
+
+        input.addEventListener('input', () => this.autoResizeMessageInput());
+
+        input.addEventListener('keydown', (e) => {
+            if (!this.isMobile) {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            } else {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            }
+        });
+
+        input.addEventListener('focus', () => {
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        this.autoResizeMessageInput();
     }
 
     setupChatContainer() {
@@ -102,17 +131,18 @@ class ChatApp {
     }
 
     handleChatScroll() {
-        if (!this.scrollButton) return;
+        const container = document.getElementById('chat-container');
+        if (!container || !this.scrollButton) return;
+        const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+        this.scrollButton.style.display = distance > 100 ? 'flex' : 'none';
+    }
 
+    setupChatContainer() {
         const chatContainer = document.getElementById('chat-container');
         if (!chatContainer) return;
-
-        const scrollTop = chatContainer.scrollTop;
-        const scrollHeight = chatContainer.scrollHeight;
-        const clientHeight = chatContainer.clientHeight;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-        this.scrollButton.style.display = distanceFromBottom > 100 ? 'flex' : 'none';
+        chatContainer.style.overflowY = 'auto';
+        chatContainer.style.webkitOverflowScrolling = 'touch';
+        chatContainer.addEventListener('scroll', () => this.handleChatScroll(), { passive: true });
     }
 
     setupEventListeners() {
@@ -880,10 +910,10 @@ class ChatApp {
     }
 
     autoResizeMessageInput() {
-        const ta = document.getElementById('message-input');
-        if (!ta) return;
-        ta.style.height = 'auto';
-        ta.style.height = Math.min(ta.scrollHeight, 320) + 'px'; // 320px ≈ 7–8 строк
+        const input = document.getElementById('message-input');
+        if (!input) return;
+        input.style.height = 'auto';
+        input.style.height = (input.scrollHeight) + 'px';
     }
 
     addUserToList(user) {
