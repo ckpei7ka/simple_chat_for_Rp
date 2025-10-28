@@ -810,6 +810,8 @@ class ChatApp {
         `;
     }
 
+
+    
     createTextMessageHTML(message, time) {
         const editedInfo = message.edited ? `<span class="edited-info">(ред.)</span>` : '';
         const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
@@ -819,14 +821,15 @@ class ChatApp {
             return `
                 <div class="message-content">
                     <div class="message-header">
-                        <span class="message-time">${time} ${editedInfo}</span>
+                        <span class="message-time">${time}</span>
                     </div>
-                    <div class="message-text" style="font-style: italic; text-align: center;">
-                        ${safeHtml}
+                    <div class="message-text anonymous-message-text">
+                        ${this.escapeHtml(message.text).replace(/\n/g, '<br>')}
                     </div>
                 </div>
             `;
         }
+
 
 
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
@@ -1050,6 +1053,16 @@ class ChatApp {
         return div.innerHTML;
     }
 }
+
+window.addEventListener("DOMContentLoaded", () => {
+  const sidebar = document.getElementById("sidebar");
+  const btn = document.getElementById("floating-menu-btn");
+  if (btn && sidebar) {
+    btn.addEventListener("click", () => {
+      sidebar.classList.toggle("active");
+    });
+  }
+});
 
 window.chatApp = null;
 
