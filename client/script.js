@@ -812,7 +812,9 @@ class ChatApp {
 
     createTextMessageHTML(message, time) {
         const editedInfo = message.edited ? `<span class="edited-info">(ред.)</span>` : '';
-        
+        const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
+
+
         if (message.senderType === 'anonymous') {
             return `
                 <div class="message-content">
@@ -820,44 +822,42 @@ class ChatApp {
                         <span class="message-time">${time} ${editedInfo}</span>
                     </div>
                     <div class="message-text" style="font-style: italic; text-align: center;">
-                        ${this.escapeHtml(message.text)}
-                        const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
+                        ${safeHtml}
                     </div>
                 </div>
             `;
         }
-        
+
+
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
-        
-        // Для сообщений от другого имени убираем аватарку
+
+
         if (message.senderType === 'other') {
             return `
                 <div class="message-content">
                     <div class="message-header">
                         <span class="message-user other-sender-name">${displayName}</span>
                         <span class="message-time">${time} ${editedInfo}</span>
-                        ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'' + this.escapeHtml(message.text) + '\')">✏️</button>' : ''}
+                        ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'${this.escapeHtml(message.text)}\')">✏️</button>' : ''}
                     </div>
-                    <div class="message-text">${this.escapeHtml(message.text)}
-                    const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
-                    </div>
+                    <div class="message-text">${safeHtml}</div>
                 </div>
             `;
         }
-        
-        // Обычное сообщение с аватаркой
+
+
         return `
             <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
                     <span class="message-time">${time} ${editedInfo}</span>
-                    ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'' + this.escapeHtml(message.text) + '\')">✏️</button>' : ''}
+                    ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'${this.escapeHtml(message.text)}\')">✏️</button>' : ''}
                 </div>
-                <div class="message-text">${this.escapeHtml(message.text)}</div>
+                <div class="message-text">${safeHtml}</div>
             </div>
-        `;
-    }
+            `;
+        }
 
     updateMessage(message) {
         const messageElement = document.getElementById(`message-${message.id}`);
