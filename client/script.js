@@ -17,10 +17,27 @@ class ChatApp {
     }
 
     initializeApp() {
+        this.setVhUnit();
+        window.addEventListener('resize', this.setVhUnit, { passive: true });
+        window.addEventListener('orientationchange', this.setVhUnit, { passive: true });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', this.setVhUnit, { passive: true });
+            window.visualViewport.addEventListener('scroll', this.setVhUnit, { passive: true });
+        }
+
         this.setupEventListeners();
         this.checkExistingSession();
         this.setupGlobalEventListeners();
         this.createScrollButton();
+        this.handleChatScroll();
+    }
+
+    setVhUnit = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        // После смены высоты пересчитаем контейнер и актуализируем видимость кнопки
+        this.setupChatContainer();
+        this.handleChatScroll();
     }
 
     setupGlobalEventListeners() {
@@ -61,10 +78,20 @@ class ChatApp {
         if (this.scrollButton) this.scrollButton.remove();
         this.scrollButton = document.createElement('button');
         this.scrollButton.id = 'scroll-to-bottom';
-        this.scrollButton.innerText = '⬇️';
-        this.scrollButton.style.display = 'none';
+        this.scrollButton.type = 'button';
+        this.scrollButton.title = 'Прокрутить вниз';
+        this.scrollButton.setAttribute('aria-label', 'Прокрутить вниз');
         this.scrollButton.className = 'scroll-to-bottom-button';
-        this.scrollButton.addEventListener('click', () => this.scrollToBottom(true));
+        // иконка (маска задаётся в CSS)
+        const icon = document.createElement('span');
+        icon.className = 'scroll-icon';
+        this.scrollButton.appendChild(icon);
+        // универсальный обработчик для тача/клика
+        const handle = (e) => { e?.preventDefault?.(); e?.stopPropagation?.(); this.scrollToBottom(true); };
+        this.scrollButton.addEventListener('pointerup', handle, { passive: false });
+        this.scrollButton.addEventListener('touchend',  handle, { passive: false });
+        this.scrollButton.addEventListener('click',     handle, { passive: false });
+        // прячем по умолчанию — покажем логикой скролла
         document.body.appendChild(this.scrollButton);
     }
 
@@ -75,7 +102,7 @@ class ChatApp {
         if (force || distance < 150) {
             container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
         }
-        if (this.scrollButton) this.scrollButton.style.display = 'none';
+        if (this.scrollButton) this.scrollButton.classList.remove('visible');
     }
 
 
@@ -89,8 +116,9 @@ class ChatApp {
 
     optimizeForMobile() {
         const mobileUsersBtn = document.getElementById('mobile-users-btn');
-        if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
+        if (mobileUsersBtn) mobileUsersBtn.classList.remove('visible');
         this.setupChatContainer();
+        this.handleChatScroll();
     }
 
     optimizeForDesktop() {
@@ -131,28 +159,38 @@ class ChatApp {
         const chatContainer = document.getElementById('chat-container');
         if (!chatContainer) return;
 
-        chatContainer.style.height = 'calc(100vh - 140px)';
+        // Используем кастомный vh, чтобы на iOS/Android не прыгала высота при появлении/скрытии адресной строки
+        chatContainer.style.height = 'calc(var(--vh, 1vh) * 100 - 140px)';
         chatContainer.style.overflowY = 'auto';
         chatContainer.style.webkitOverflowScrolling = 'touch';
         
         chatContainer.addEventListener('scroll', () => {
             this.handleChatScroll();
         }, { passive: true });
+        this.handleChatScroll();
     }
+
+    // handleChatScroll() {
+    //     const container = document.getElementById('chat-container');
+    //     if (!container || !this.scrollButton) return;
+    //     // Предохраняемся от «резинового» скролла iOS (отрицательные значения)
+    //     const raw = container.scrollHeight - container.scrollTop - container.clientHeight;
+    //     const distance = Math.max(0, raw);
+    //     const hasOverflow = (container.scrollHeight - container.clientHeight) > 1;
+    //     // Порог поменьше, чтобы на компактных экранах кнопка не исчезала из-за округлений
+    //     const shouldShow = hasOverflow && distance > 40;
+    //     this.scrollButton.classList.toggle('visible', shouldShow);
+    // }
 
     handleChatScroll() {
         const container = document.getElementById('chat-container');
         if (!container || !this.scrollButton) return;
-        const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
-        this.scrollButton.style.display = distance > 100 ? 'flex' : 'none';
-    }
-
-    setupChatContainer() {
-        const chatContainer = document.getElementById('chat-container');
-        if (!chatContainer) return;
-        chatContainer.style.overflowY = 'auto';
-        chatContainer.style.webkitOverflowScrolling = 'touch';
-        chatContainer.addEventListener('scroll', () => this.handleChatScroll(), { passive: true });
+        // защита от «резинового» скролла iOS
+        const raw = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const distance = Math.max(0, raw);
+        const hasOverflow = (container.scrollHeight - container.clientHeight) > 1;
+        const shouldShow = hasOverflow && distance > 40;
+        this.scrollButton.classList.toggle('visible', shouldShow);
     }
 
     setupEventListeners() {
@@ -443,8 +481,16 @@ class ChatApp {
                 this.displayChatHistory(history);
             },
             'new-message': (message) => {
+                const c = document.getElementById('chat-container');
+                const nearBottom = !c
+                  || (c.scrollHeight - c.scrollTop - c.clientHeight) < 120;
                 this.displayMessage(message);
-                this.scrollToBottom();
+                if (nearBottom) {
+                    this.scrollToBottom(true);
+                } else {
+                    // пользователь читает историю — не автоскроллим, просто обновим состояние кнопки
+                    this.handleChatScroll();
+                }
             },
             'message-edited': (message) => {
                 this.updateMessage(message);
@@ -840,6 +886,7 @@ class ChatApp {
         container.innerHTML = '';
         history.forEach(message => this.displayMessage(message));
         setTimeout(() => this.scrollToBottom(true), 100);
+        this.handleChatScroll();
     }
 
     displayMessage(message) {
@@ -861,6 +908,7 @@ class ChatApp {
         }
         
         container.appendChild(messageElement);
+        this.handleChatScroll();
     }
 
     getMessageClasses(message) {
@@ -1227,7 +1275,7 @@ class ChatApp {
                     }
                     
                     if (this.scrollButton) {
-                        this.scrollButton.style.display = 'none';
+                        if (this.scrollButton) this.scrollButton.classList.remove('visible');
                     }
                 } catch (error) {
                     container.scrollTop = container.scrollHeight;

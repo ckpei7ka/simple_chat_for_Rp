@@ -39,6 +39,7 @@
     --border-radius: 8px;
     --border-radius-small: 4px;
     --transition: all 0.3s ease;
+    --vh: 1vh;
 }
 /* Заполнение экрана и адаптивность */
 html, body, #app, #chat-interface {
@@ -768,6 +769,66 @@ body {
   #floating-menu-btn {
     display: block;
   }
+}
+
+.scroll-to-bottom-button {
+  position: fixed;
+  right: 16px;
+  bottom: calc(6rem + 16px);             /* выше панели ввода */
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--cod-accent-blood);
+  border: 1px solid var(--cod-border);
+  box-shadow: var(--shadow-large);
+  cursor: pointer;
+  opacity: 0;                             /* управляется классом .visible */
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .2s ease, transform .2s ease;
+  z-index: 3001;                          /* выше любых панелей/модалок */
+}
+
+.scroll-to-bottom-button.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.scroll-to-bottom-button:hover { background-color: #cc2f3b; transform: translateY(-2px); }
+
+.scroll-to-bottom-button:active {
+  transform: scale(0.95);
+}
+
+/* Белая иконка самолётика, повернутая вниз */
+.scroll-to-bottom-button .scroll-icon {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  background: white;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="black" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>') no-repeat center / contain;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="black" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>') no-repeat center / contain;
+  transform: rotate(90deg);
+  pointer-events: none; /* чтобы внутренний элемент не перехватывал тапы */
+}
+
+/* На всякий случай отключаем pointer-events у всех детей, чтобы кнопка ловила тап целиком */
+.scroll-to-bottom-button * { pointer-events: none; }
+
+ @media (max-width: 768px) {
+ .scroll-to-bottom-button {
+    right: 0.75rem;
+    bottom: calc(7rem + env(safe-area-inset-bottom));  /* запас над input + safe area */
+    width: 56px;
+    height: 56px;
+   }
+ }
+
+/* Улучшаем прокрутку контейнера на iOS/Android */
+#chat-container {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Модальное окно профиля */
