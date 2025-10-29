@@ -1,5 +1,13 @@
-/* полный файл без изменений логики (панель фиксируется стилями)
-   ─ см. ваш исходный script.js ─ */
+/* Новая стабильная реализация прокрутки вниз для мобильных (IntersectionObserver)
+   Удалены все старые функции и вызовы, связанные со скроллом:
+   - createScrollButton (старая)
+   - handleChatScroll
+   - любые старые setupChatContainer/scrollToBottom вариации
+   Добавлены:
+   - initScrollUI / createScrollButtonIfNeeded / installBottomSentinelObserver
+   - обновлённый scrollToBottom + корректная автопрокрутка только когда пользователь внизу
+*/
+
 class ChatApp {
     constructor() {
         this.socket = null;
@@ -10,6 +18,7 @@ class ChatApp {
         this.isConnected = false;
         this.eventListeners = new Map();
         this.scrollButton = null;
+        this._bottomObserver = null; // IntersectionObserver
         this.isStoryteller = false;
         this.messageSender = 'self';
         this.customSenderName = '';
@@ -17,27 +26,10 @@ class ChatApp {
     }
 
     initializeApp() {
-        this.setVhUnit();
-        window.addEventListener('resize', this.setVhUnit, { passive: true });
-        window.addEventListener('orientationchange', this.setVhUnit, { passive: true });
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', this.setVhUnit, { passive: true });
-            window.visualViewport.addEventListener('scroll', this.setVhUnit, { passive: true });
-        }
-
         this.setupEventListeners();
         this.checkExistingSession();
         this.setupGlobalEventListeners();
-        this.createScrollButton();
-        this.handleChatScroll();
-    }
-
-    setVhUnit = () => {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-        // После смены высоты пересчитаем контейнер и актуализируем видимость кнопки
-        this.setupChatContainer();
-        this.handleChatScroll();
+        // Кнопку и наблюдателя ставим после появления интерфейса (в connectToChat)
     }
 
     setupGlobalEventListeners() {
@@ -62,49 +54,7 @@ class ChatApp {
                 }
             }
         });
-
-        this.addEventListener('sheet-upload-btn', 'click', () => {
-            const inp = document.getElementById('sheet-file-input');
-            if (inp) inp.click();
-        });
-
-        this.addEventListener('sheet-file-input', 'change', (e) => {
-            const file = e.target.files?.[0];
-            if (file) this.handleSheetUpload(file);
-        });
     }
-
-    createScrollButton() {
-        if (this.scrollButton) this.scrollButton.remove();
-        this.scrollButton = document.createElement('button');
-        this.scrollButton.id = 'scroll-to-bottom';
-        this.scrollButton.type = 'button';
-        this.scrollButton.title = 'Прокрутить вниз';
-        this.scrollButton.setAttribute('aria-label', 'Прокрутить вниз');
-        this.scrollButton.className = 'scroll-to-bottom-button';
-        // иконка (маска задаётся в CSS)
-        const icon = document.createElement('span');
-        icon.className = 'scroll-icon';
-        this.scrollButton.appendChild(icon);
-        // универсальный обработчик для тача/клика
-        const handle = (e) => { e?.preventDefault?.(); e?.stopPropagation?.(); this.scrollToBottom(true); };
-        this.scrollButton.addEventListener('pointerup', handle, { passive: false });
-        this.scrollButton.addEventListener('touchend',  handle, { passive: false });
-        this.scrollButton.addEventListener('click',     handle, { passive: false });
-        // прячем по умолчанию — покажем логикой скролла
-        document.body.appendChild(this.scrollButton);
-    }
-
-    scrollToBottom(force = false) {
-        const container = document.getElementById('chat-container');
-        if (!container) return;
-        const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
-        if (force || distance < 150) {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }
-        if (this.scrollButton) this.scrollButton.classList.remove('visible');
-    }
-
 
     handleResize() {
         const wasMobile = this.isMobile;
@@ -116,16 +66,22 @@ class ChatApp {
 
     optimizeForMobile() {
         const mobileUsersBtn = document.getElementById('mobile-users-btn');
-        if (mobileUsersBtn) mobileUsersBtn.classList.remove('visible');
-        this.setupChatContainer();
-        this.handleChatScroll();
+        if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
+        const chatContainer = document.getElementById('chat-container');
+        if (chatContainer) {
+            chatContainer.style.overflowY = 'auto';
+            chatContainer.style.webkitOverflowScrolling = 'touch';
+        }
     }
 
     optimizeForDesktop() {
         const mobileUsersBtn = document.getElementById('mobile-users-btn');
         if (mobileUsersBtn) mobileUsersBtn.style.display = 'block';
         const chatContainer = document.getElementById('chat-container');
-        if (chatContainer) chatContainer.style.height = '';
+        if (chatContainer) {
+            chatContainer.style.overflowY = 'auto';
+            chatContainer.style.webkitOverflowScrolling = 'touch';
+        }
     }
 
     setupMessageInputListeners() {
@@ -155,44 +111,6 @@ class ChatApp {
         this.autoResizeMessageInput();
     }
 
-    setupChatContainer() {
-        const chatContainer = document.getElementById('chat-container');
-        if (!chatContainer) return;
-
-        // Используем кастомный vh, чтобы на iOS/Android не прыгала высота при появлении/скрытии адресной строки
-        chatContainer.style.height = 'calc(var(--vh, 1vh) * 100 - 140px)';
-        chatContainer.style.overflowY = 'auto';
-        chatContainer.style.webkitOverflowScrolling = 'touch';
-        
-        chatContainer.addEventListener('scroll', () => {
-            this.handleChatScroll();
-        }, { passive: true });
-        this.handleChatScroll();
-    }
-
-    // handleChatScroll() {
-    //     const container = document.getElementById('chat-container');
-    //     if (!container || !this.scrollButton) return;
-    //     // Предохраняемся от «резинового» скролла iOS (отрицательные значения)
-    //     const raw = container.scrollHeight - container.scrollTop - container.clientHeight;
-    //     const distance = Math.max(0, raw);
-    //     const hasOverflow = (container.scrollHeight - container.clientHeight) > 1;
-    //     // Порог поменьше, чтобы на компактных экранах кнопка не исчезала из-за округлений
-    //     const shouldShow = hasOverflow && distance > 40;
-    //     this.scrollButton.classList.toggle('visible', shouldShow);
-    // }
-
-    handleChatScroll() {
-        const container = document.getElementById('chat-container');
-        if (!container || !this.scrollButton) return;
-        // защита от «резинового» скролла iOS
-        const raw = container.scrollHeight - container.scrollTop - container.clientHeight;
-        const distance = Math.max(0, raw);
-        const hasOverflow = (container.scrollHeight - container.clientHeight) > 1;
-        const shouldShow = hasOverflow && distance > 40;
-        this.scrollButton.classList.toggle('visible', shouldShow);
-    }
-
     setupEventListeners() {
         this.addEventListener('login-form', 'submit', (e) => {
             e.preventDefault();
@@ -209,6 +127,16 @@ class ChatApp {
 
         this.addEventListener('profile-modal-close', 'click', () => {
             this.closeUserProfile();
+        });
+
+        /* === Поддержка загрузки листа персонажа === */
+        this.addEventListener('sheet-upload-btn', 'click', () => {
+            const input = document.getElementById('sheet-file-input');
+            if (input) input.click();
+        });
+        this.addEventListener('sheet-file-input', 'change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) this.handleSheetUpload(file);
         });
     }
 
@@ -249,45 +177,25 @@ class ChatApp {
         };
 
         Object.entries(chatHandlers).forEach(([id, handler]) => {
-            const eventType = id === 'message-input' ? 'keypress' : 
-                id === 'message-sender' ? 'change' : 'click';
+            const eventType = id === 'message-input' ? 'keypress' :
+                              id === 'message-sender' ? 'change'  : 'click';
             this.addChatEventListener(id, eventType, handler);
         });
 
-        // Особый случай для custom-sender
-        const customSender = document.getElementById('custom-sender');
-        if (customSender) {
-            customSender.addEventListener('input', (e) => {
-                this.customSenderName = e.target.value.trim();
-            });
-            customSender.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    this.sendMessage();
-                }
-            });
-        }
-
-        this.setupChatContainer();
-
+        // Текстовое поле
         const ta = document.getElementById('message-input');
         if (ta) {
-            // Автоподгон высоты при наборе
             ta.addEventListener('input', () => this.autoResizeMessageInput());
-            // Первичная установка (и после смены placeholder)
             this.autoResizeMessageInput();
 
-            // Горячие клавиши:
             ta.addEventListener('keydown', (e) => {
-                // ПК: отправка Ctrl+Enter, обычный Enter — новая строка
                 if (!this.isMobile) {
                     if (e.key === 'Enter' && e.ctrlKey) {
                         e.preventDefault();
                         this.sendMessage();
                     }
-                    return; // на ПК Enter без Ctrl не трогаем — даём писать абзацы
+                    return;
                 }
-
-                // Мобильные: Enter отправляет, Shift+Enter — перенос строки
                 if (this.isMobile) {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -296,6 +204,9 @@ class ChatApp {
                 }
             });
         }
+
+        // После возможного «обнуления» узлов — заново ставим UI скролла
+        this.initScrollUI();
     }
 
     addChatEventListener(elementId, event, handler) {
@@ -374,7 +285,7 @@ class ChatApp {
         let characterData = await this.loadCharacter(name);
         let avatarUrl = characterData?.avatar || '/uploads/default-avatar.png';
         let finalDescription = characterData?.description || description;
-        let sheetUrl = characterData?.sheet || '';
+
         if (this.avatarBase64) {
             avatarUrl = await this.uploadAvatar(name);
         }
@@ -387,7 +298,6 @@ class ChatApp {
             name,
             avatar: avatarUrl,
             description: finalDescription,
-            sheet: sheetUrl,
             isStoryteller: name === 'Рассказчик'
         };
 
@@ -452,16 +362,16 @@ class ChatApp {
         if (this.isMobile) this.optimizeForMobile();
 
         this.setupChatEventListeners();
+        this.initScrollUI(); // <-- здесь создаём кнопку и наблюдатель
         this.updateUserProfile();
         this.setupSocketHandlers();
 
         this.socket.on('connect', () => {
             this.isConnected = true;
             this.socket.emit('user-join', this.currentUser);
-            
+
             if (this.currentUser.isStoryteller) {
                 this.showStorytellerControls();
-                // Инициализируем поле как disabled
                 const customSender = document.getElementById('custom-sender');
                 if (customSender) {
                     customSender.disabled = true;
@@ -481,16 +391,16 @@ class ChatApp {
                 this.displayChatHistory(history);
             },
             'new-message': (message) => {
-                const c = document.getElementById('chat-container');
-                const nearBottom = !c
-                  || (c.scrollHeight - c.scrollTop - c.clientHeight) < 120;
+                const chatContainer = document.getElementById('chat-container');
+                const wasAtBottom = chatContainer &&
+                    (chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 5);
+
                 this.displayMessage(message);
-                if (nearBottom) {
-                    this.scrollToBottom(true);
-                } else {
-                    // пользователь читает историю — не автоскроллим, просто обновим состояние кнопки
-                    this.handleChatScroll();
+
+                if (wasAtBottom) {
+                    this.scrollToBottom();
                 }
+                // Если не были внизу — кнопка покажется/скроется наблюдателем автоматически
             },
             'message-edited': (message) => {
                 this.updateMessage(message);
@@ -509,7 +419,7 @@ class ChatApp {
             'user-updated': (user) => {
                 this.updateUserInList(user);
             },
-            'connect_error': (error) => {
+            'connect_error': () => {
                 alert('Ошибка подключения к серверу');
             },
             'disconnect': () => {
@@ -525,10 +435,86 @@ class ChatApp {
         });
     }
 
+    // ========= Новая логика скролла =========
+
+    initScrollUI() {
+        this.createScrollButtonIfNeeded();
+        this.installBottomSentinelObserver();
+    }
+
+    createScrollButtonIfNeeded() {
+        if (this.scrollButton && document.body.contains(this.scrollButton)) return;
+        this.scrollButton = document.createElement('button');
+        this.scrollButton.id = 'scroll-to-bottom';
+        this.scrollButton.className = 'scroll-to-bottom-button';
+        this.scrollButton.textContent = '⬇️';
+        this.scrollButton.style.display = 'none';
+        this.scrollButton.addEventListener('click', () => this.scrollToBottom(true));
+        document.body.appendChild(this.scrollButton);
+    }
+
+    installBottomSentinelObserver() {
+        const chatContainer = document.getElementById('chat-container');
+        if (!chatContainer) return;
+
+        // создаём или перемещаем маячок в самый низ
+        let sentinel = document.getElementById('chat-bottom-sentinel');
+        if (!sentinel) {
+            sentinel = document.createElement('div');
+            sentinel.id = 'chat-bottom-sentinel';
+            sentinel.style.cssText = 'width:100%;height:1px;';
+            chatContainer.appendChild(sentinel);
+        } else if (sentinel.parentElement !== chatContainer) {
+            chatContainer.appendChild(sentinel);
+        } else {
+            // гарантируем, что маячок самый нижний
+            if (sentinel !== chatContainer.lastElementChild) {
+                chatContainer.appendChild(sentinel);
+            }
+        }
+
+        // отключаем старый наблюдатель
+        if (this._bottomObserver) {
+            this._bottomObserver.disconnect();
+        }
+
+        // наблюдаем видимость маячка внутри контейнера
+        this._bottomObserver = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (this.scrollButton) {
+                    this.scrollButton.style.display = entry.isIntersecting ? 'none' : 'flex';
+                }
+            },
+            { root: chatContainer, threshold: 1.0 }
+        );
+        this._bottomObserver.observe(sentinel);
+    }
+
+    scrollToBottom(instant = false) {
+        const container = document.getElementById('chat-container');
+        if (!container) return;
+        // Небольшая задержка, чтобы дождаться layout/рендеринга
+        setTimeout(() => {
+            try {
+                if (instant) {
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                }
+                // Кнопка скроется автоматически, когда маячок окажется видимым
+            } catch {
+                container.scrollTop = container.scrollHeight;
+            }
+        }, 50);
+    }
+
+    // ========= Остальной функционал =========
+
     handleSenderChange(senderType) {
         this.messageSender = senderType;
         const customSender = document.getElementById('custom-sender');
-        
+
         if (senderType === 'other') {
             customSender.disabled = false;
             customSender.placeholder = "Введите имя отправителя...";
@@ -538,7 +524,7 @@ class ChatApp {
             customSender.value = '';
             customSender.placeholder = "Выберите 'От другого имени'";
         }
-        
+
         this.updateMessageInputPlaceholder();
     }
 
@@ -567,88 +553,11 @@ class ChatApp {
         if (file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                document.getElementById('avatar-preview').innerHTML = 
+                document.getElementById('avatar-preview').innerHTML =
                     `<img src="${e.target.result}" alt="Preview">`;
                 this.avatarBase64 = e.target.result;
             };
             reader.readAsDataURL(file);
-        }
-    }
-
-    async handleSheetUpload(file) {
-        if (!file) return;
-        if (!this.currentUser?.name) {
-            alert('Сессия пользователя не найдена');
-            return;
-        }
-
-        // Предупреждение при перезаписи
-        if (this.currentUser.sheet) {
-            const ok = confirm('Лист уже загружен. Перезаписать?');
-            if (!ok) return;
-        }
-
-        try {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-            const response = await fetch('/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                file: e.target.result,
-                filename: 'sheet.png',            // ключевое слово "sheet" — сервер поймёт
-                characterName: this.currentUser.name
-                })
-            });
-            const result = await response.json();
-
-            if (result?.url) {
-                // Локально обновим currentUser и localStorage
-                this.currentUser.sheet = result.url;
-                localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
-
-                // На всякий — пропишем и в персонажа на сервере (не обязательно, но полезно)
-                await fetch(`/character/${encodeURIComponent(this.currentUser.name)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sheet: result.url })
-                });
-
-                // ⬇️ Перечитаем профиль с сервера, чтобы избежать расхождений
-                const fresh = await this.loadCharacter(this.currentUser.name);
-                if (fresh && fresh.sheet) {
-                    this.currentUser.sheet = fresh.sheet;
-                    localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
-                }
-
-                // Обновим модалку "на лету"
-                const sheetImg = document.getElementById('profile-modal-sheet');
-                const sheetEmpty = document.getElementById('profile-modal-sheet-empty');
-                const openBtn = document.getElementById('sheet-open-btn');
-
-                if (sheetImg) {
-                sheetImg.src = result.url;
-                sheetImg.classList.remove('hidden');
-                }
-                if (sheetEmpty) sheetEmpty.classList.add('hidden');
-                if (openBtn) {
-                openBtn.href = result.url;
-                openBtn.classList.remove('hidden');
-                }
-
-                alert('Лист персонажа обновлён');
-            } else {
-                alert('Не удалось загрузить лист персонажа');
-            }
-            };
-            reader.readAsDataURL(file);
-        } catch (err) {
-            console.error(err);
-            alert('Ошибка при загрузке листа персонажа');
-        } finally {
-            // Сброс input, чтобы при выборе того же файла событие сработало снова
-            const inp = document.getElementById('sheet-file-input');
-            if (inp) inp.value = '';
         }
     }
 
@@ -667,7 +576,7 @@ class ChatApp {
                     })
                 });
                 const result = await response.json();
-                
+
                 this.socket.emit('send-file', {
                     filename: result.filename,
                     originalName: result.originalName,
@@ -675,7 +584,7 @@ class ChatApp {
                 });
             };
             reader.readAsDataURL(file);
-        } catch (error) {
+        } catch {
             alert('Ошибка при загрузке файла');
         }
     }
@@ -688,31 +597,30 @@ class ChatApp {
 
         const input = document.getElementById('message-input');
         const text = input.value.trim();
-        
+
         if (text) {
-            // Валидация для отправки от другого имени
             if (this.messageSender === 'other') {
                 const customSender = document.getElementById('custom-sender');
                 const senderName = customSender.value.trim();
-                
+
                 if (!senderName) {
                     alert('Пожалуйста, введите имя отправителя');
                     customSender.focus();
                     return;
                 }
-                
+
                 this.customSenderName = senderName;
             }
-            
+
             const messageData = {
                 text: text,
                 senderType: this.messageSender,
                 customSender: this.customSenderName
             };
-            
+
             this.socket.emit('send-message', messageData);
             input.value = '';
-            
+
             if (this.isMobile) {
                 input.blur();
                 setTimeout(() => this.scrollToBottom(true), 100);
@@ -723,7 +631,7 @@ class ChatApp {
     rollDice() {
         const diceCount = prompt('Введите количество кубиков d10 (1-15):', '5');
         const count = parseInt(diceCount);
-        
+
         if (count >= 1 && count <= 15) {
             this.socket.emit('roll-dice', count);
         } else if (diceCount !== null) {
@@ -741,106 +649,38 @@ class ChatApp {
         }
     }
 
-    isDefaultAvatar(url) {
-        // всё, что считаем "нет аватара"
-        return !url || url === '/uploads/default-avatar.png';
-    }
+    showUserProfile(user) {
+        document.getElementById('profile-modal-avatar').src = user.avatar;
+        document.getElementById('profile-modal-name').textContent = user.name;
+        document.getElementById('profile-modal-description').textContent =
+            user.description || 'Описание отсутствует';
 
-    getInitial(name = '') {
-        const s = name.trim();
-        return s ? s[0].toUpperCase() : '?';
-    }
-
-    createAvatarHTML(name, url, context) {
-        // context: 'message' | 'userlist' | 'profile'
-        const initial = this.getInitial(name);
-
-        if (this.isDefaultAvatar(url)) {
-            const sizeClass =
-                context === 'message' ? 'avatar-initials--sm' :
-                context === 'userlist' ? 'avatar-initials--md' :
-                /* profile / default */   'avatar-initials--lg';
-
-            // ВАЖНО: добавляем user-avatar, чтобы сработали размеры в CSS контейнеров
-            return `<div class="user-avatar avatar-initials ${sizeClass}" aria-hidden="true">${initial}</div>`;
-        }
-
-        // Для изображений тоже всегда включаем user-avatar,
-        // и при необходимости — доп.класс (например, message-avatar для сообщений)
-        const extra =
-            context === 'message' ? 'message-avatar' : '';
-        return `<img src="${url}" alt="${name}" class="user-avatar ${extra}">`;
-    } 
-
-    async showUserProfile(user) {
-        // Перед показом модалки перечитаем карточку с сервера,
-        // чтобы гарантированно получить актуальный sheet/описание/аватар
-        let profile = user;
-        try {
-            const fresh = await this.loadCharacter(user.name);
-            if (fresh) {
-                profile = {
-                    ...user,
-                    avatar: fresh.avatar || user.avatar,
-                    description: fresh.description ?? user.description,
-                    sheet: fresh.sheet || user.sheet
-                };
-                // Если это наш текущий пользователь — синхронизируем localStorage
-                if (this.currentUser && this.currentUser.name === user.name) {
-                    this.currentUser.avatar = profile.avatar;
-                    this.currentUser.description = profile.description || '';
-                    this.currentUser.sheet = profile.sheet || '';
-                    localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
-                }
-            }
-        } catch (e) { /* no-op */ }
-
-        // 1) Берём аватар модалки по id
-        const profileAvatar = document.getElementById('profile-modal-avatar');
-        const nameEl = document.getElementById('profile-modal-name');
-        const descEl = document.getElementById('profile-modal-description');
         const storytellerBadge = document.getElementById('profile-modal-storyteller');
-
-        // Защита от отсутствующих нод — чтобы не падало, а просто молча не открылось
-        if (!profileAvatar || !nameEl || !descEl || !storytellerBadge) {
-            console.warn('Profile modal elements not found');
-            return;
+        if (user.isStoryteller) {
+            storytellerBadge.classList.remove('hidden');
+        } else {
+            storytellerBadge.classList.add('hidden');
         }
 
-        // 2) Собираем HTML для аватара и заменяем узел в модалке
-        const html = this.createAvatarHTML(profile?.name, profile?.avatar, 'user-avatar');
-        const tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        const node = tmp.firstChild;
-        node.id = 'profile-modal-avatar';
-
-        const parent = profileAvatar.parentElement;
-        parent.replaceChild(node, profileAvatar);
-
-        // 3) Заполняем остальное
-        nameEl.textContent = profile.name;
-        descEl.textContent = profile.description || 'Описание отсутствует';
-        storytellerBadge.classList[profile.isStoryteller ? 'remove' : 'add']('hidden');
-
-        // 3.bis) Лист персонажа — проставляем превью и ссылку
+        /* Инициализация листа персонажа в модалке */
         const sheetImg = document.getElementById('profile-modal-sheet');
         const sheetEmpty = document.getElementById('profile-modal-sheet-empty');
-        const openBtn = document.getElementById('sheet-open-btn');
-        const sheetUrl = profile.sheet || '';
-
-        if (sheetUrl) {
-            if (sheetImg) { sheetImg.src = sheetUrl; sheetImg.classList.remove('hidden'); }
-            if (sheetEmpty) sheetEmpty.classList.add('hidden');
-            if (openBtn) { openBtn.href = sheetUrl; openBtn.classList.remove('hidden'); }
+        const sheetOpen = document.getElementById('sheet-open-btn');
+        if (user.sheet) {
+            if (sheetImg){ sheetImg.src = user.sheet; sheetImg.classList.remove('hidden'); }
+            if (sheetEmpty){ sheetEmpty.classList.add('hidden'); }
+            if (sheetOpen){ sheetOpen.href = user.sheet; sheetOpen.classList.remove('hidden'); }
         } else {
-            if (sheetImg) { sheetImg.src = ''; sheetImg.classList.add('hidden'); }
-            if (sheetEmpty) sheetEmpty.classList.remove('hidden');
-            if (openBtn) openBtn.classList.add('hidden');
+            if (sheetImg){ sheetImg.classList.add('hidden'); sheetImg.removeAttribute('src'); }
+            if (sheetEmpty){ sheetEmpty.classList.remove('hidden'); }
+            if (sheetOpen){ sheetOpen.removeAttribute('href'); sheetOpen.classList.add('hidden'); }
         }
 
-        // 4) Показываем модалку и прячем сайдбар на мобиле
         document.getElementById('user-profile-modal').classList.remove('hidden');
-        if (this.isMobile) this.hideSidebar();
+
+        if (this.isMobile) {
+            this.hideSidebar();
+        }
     }
 
     closeUserProfile() {
@@ -852,9 +692,9 @@ class ChatApp {
         if (newName === null) return;
 
         const newDescription = prompt('Новое описание:', this.currentUser.description);
-        
+
         let newAvatar = this.currentUser.avatar;
-        
+
         if (this.avatarBase64) {
             newAvatar = await this.uploadAvatar(newName);
         }
@@ -865,10 +705,10 @@ class ChatApp {
         this.currentUser.description = newDescription || '';
         this.currentUser.avatar = newAvatar;
         this.currentUser.isStoryteller = newName === 'Рассказчик';
-        
+
         localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
         this.updateUserProfile();
-        
+
         this.socket.emit('update-profile', {
             name: newName,
             avatar: newAvatar,
@@ -882,11 +722,13 @@ class ChatApp {
     displayChatHistory(history) {
         const container = document.getElementById('messages-container');
         if (!container) return;
-        
+
         container.innerHTML = '';
         history.forEach(message => this.displayMessage(message));
-        setTimeout(() => this.scrollToBottom(true), 100);
-        this.handleChatScroll();
+        setTimeout(() => {
+            this.scrollToBottom(true);
+            this.installBottomSentinelObserver();
+        }, 100);
     }
 
     displayMessage(message) {
@@ -896,9 +738,9 @@ class ChatApp {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${this.getMessageClasses(message)}`;
         messageElement.id = `message-${message.id}`;
-        
+
         const time = new Date(message.timestamp).toLocaleTimeString();
-        
+
         if (message.type === 'file') {
             messageElement.innerHTML = this.createFileMessageHTML(message, time);
         } else if (message.type === 'dice') {
@@ -906,9 +748,11 @@ class ChatApp {
         } else {
             messageElement.innerHTML = this.createTextMessageHTML(message, time);
         }
-        
+
         container.appendChild(messageElement);
-        this.handleChatScroll();
+
+        // Убеждаемся, что маячок — последний элемент в контейнере
+        this.installBottomSentinelObserver();
     }
 
     getMessageClasses(message) {
@@ -922,8 +766,7 @@ class ChatApp {
 
     createFileMessageHTML(message, time) {
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
-        
-        // Для сообщений от другого имени убираем аватарку
+
         if (message.senderType === 'other') {
             return `
                 <div class="message-content">
@@ -938,10 +781,9 @@ class ChatApp {
                 </div>
             `;
         }
-        
-        // Обычное сообщение с аватаркой
+
         return `
-            ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
+            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
@@ -958,10 +800,9 @@ class ChatApp {
     createDiceMessageHTML(message, time) {
         const roll = message.rollResult;
         const successClass = roll.totalSuccesses >= 5 ? 'dice-success' : roll.totalSuccesses >= 3 ? 'dice-good' : 'dice-fail';
-        
+
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
-        
-        // Для сообщений от другого имени убираем аватарку
+
         if (message.senderType === 'other') {
             return `
                 <div class="message-content">
@@ -994,10 +835,9 @@ class ChatApp {
                 </div>
             `;
         }
-        
-        // Обычное сообщение с аватаркой
+
         return `
-            ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
+            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
@@ -1029,12 +869,9 @@ class ChatApp {
         `;
     }
 
-
-    
     createTextMessageHTML(message, time) {
         const editedInfo = message.edited ? `<span class="edited-info">(ред.)</span>` : '';
         const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
-
 
         if (message.senderType === 'anonymous') {
             return `
@@ -1049,10 +886,7 @@ class ChatApp {
             `;
         }
 
-
-
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
-
 
         if (message.senderType === 'other') {
             return `
@@ -1060,37 +894,36 @@ class ChatApp {
                     <div class="message-header">
                         <span class="message-user other-sender-name">${displayName}</span>
                         <span class="message-time">${time} ${editedInfo}</span>
-                        ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'${this.escapeHtml(message.text)}\')">✏️</button>' : ''}
+                        ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'\')">✏️</button>' : ''}
                     </div>
                     <div class="message-text">${safeHtml}</div>
                 </div>
             `;
         }
 
-
         return `
-            ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
+            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
                     <span class="message-time">${time} ${editedInfo}</span>
-                    ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'${this.escapeHtml(message.text)}\')">✏️</button>' : ''}
+                    ${message.canEdit ? '<button class="edit-btn" onclick="window.chatApp.editMessage(\'' + message.id + '\', \'\')">✏️</button>' : ''}
                 </div>
                 <div class="message-text">${safeHtml}</div>
             </div>
-            `;
-        }
+        `;
+    }
 
     updateMessage(message) {
         const messageElement = document.getElementById(`message-${message.id}`);
         if (messageElement) {
             const textElement = messageElement.querySelector('.message-text');
             const timeElement = messageElement.querySelector('.message-time');
-            
+
             if (textElement) {
                 textElement.textContent = message.text;
             }
-            
+
             if (timeElement && message.edited) {
                 const editedTime = new Date(message.editTimestamp).toLocaleTimeString();
                 timeElement.innerHTML = `${timeElement.textContent.split('(')[0]} (ред. ${message.editedBy} в ${editedTime})`;
@@ -1112,30 +945,27 @@ class ChatApp {
             </div>
         `;
         container.appendChild(messageElement);
-        this.scrollToBottom();
+
+        const chatContainer = document.getElementById('chat-container');
+        if (chatContainer &&
+            (chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 5)) {
+            this.scrollToBottom();
+        }
+        this.installBottomSentinelObserver();
     }
 
     updateUserProfile() {
-        const userAvatarEl = document.getElementById('user-avatar');
+        const userAvatar = document.getElementById('user-avatar');
         const userName = document.getElementById('user-name');
 
-        if (userAvatarEl) {
-            const wrapper = userAvatarEl.parentElement;
-            const html = this.createAvatarHTML(this.currentUser.name, this.currentUser.avatar, 'user-avatar');
-            // Заменяем <img id="user-avatar"> на готовый HTML (сохраним id для будущих обращений)
-            const tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            const node = tmp.firstChild;
-            node.id = 'user-avatar';
-            wrapper.replaceChild(node, userAvatarEl);
-        }
+        if (userAvatar) userAvatar.src = this.currentUser.avatar;
         if (userName) userName.textContent = this.currentUser.name;
     }
 
     updateUsersList(users) {
         const container = document.getElementById('users-container');
         if (!container) return;
-        
+
         container.innerHTML = '';
         users.forEach(user => this.addUserToList(user));
     }
@@ -1154,26 +984,22 @@ class ChatApp {
         const userElement = document.createElement('div');
         userElement.className = 'user-item';
         userElement.id = `user-${user.id}`;
-        
-        const avatarHTML = this.createAvatarHTML(user.name, user.avatar, 'userlist-avatar');
 
         userElement.innerHTML = `
-            ${avatarHTML}
-            <div class="user-info">
-                <div class="user-name">${this.escapeHtml(user.name)}</div>
-            </div>
+            <img src="${user.avatar}" alt="${user.name}" class="user-avatar">
             <div class="user-info">
                 <div class="user-name">
+                    ${user.name}
                     ${user.isStoryteller ? '<span class="storyteller-badge">🎭</span>' : ''}
                 </div>
                 <div class="user-status">В сети</div>
             </div>
         `;
-        
+
         userElement.addEventListener('click', () => {
             this.showUserProfile(user);
         });
-        
+
         container.appendChild(userElement);
     }
 
@@ -1184,14 +1010,9 @@ class ChatApp {
 
     updateUserInList(user) {
         const userElement = document.getElementById(`user-${user.id}`);
-        const avatarHTML = this.createAvatarHTML(user.name, user.avatar, 'userlist-avatar');
         if (userElement) {
             userElement.innerHTML = `
-                ${avatarHTML}
-                <div class="user-info">
-                    <div class="user-name">${this.escapeHtml(user.name)}</div>
-                    <div class="user-status">${user.isStoryteller ? 'Рассказчик' : 'В Тени'}</div>
-                </div>
+                <img src="${user.avatar}" alt="${user.name}" class="user-avatar">
                 <div class="user-info">
                     <div class="user-name">
                         ${user.name}
@@ -1200,7 +1021,7 @@ class ChatApp {
                     <div class="user-status">В сети</div>
                 </div>
             `;
-            
+
             userElement.addEventListener('click', () => {
                 this.showUserProfile(user);
             });
@@ -1214,41 +1035,41 @@ class ChatApp {
                 this.socket.disconnect();
                 this.socket = null;
             }
-            
+
             localStorage.removeItem('chatUser');
             this.currentUser = null;
             this.isConnected = false;
             this.isStoryteller = false;
             this.messageSender = 'self';
             this.customSenderName = '';
-            
+
             this.removeEventListeners();
-            
+
             document.getElementById('chat-interface').classList.add('hidden');
             document.getElementById('login-modal').classList.remove('hidden');
-            
+
             const controls = document.getElementById('storyteller-controls');
             if (controls) controls.classList.add('hidden');
-            
+
             const customSender = document.getElementById('custom-sender');
             if (customSender) {
                 customSender.value = '';
                 customSender.disabled = true;
                 customSender.placeholder = "Выберите 'От другого имени'";
             }
-            
+
             const senderSelect = document.getElementById('message-sender');
             if (senderSelect) senderSelect.value = 'self';
-            
+
             document.getElementById('login-form').reset();
             document.getElementById('avatar-preview').innerHTML = '';
             this.avatarBase64 = null;
-            
+
             const messagesContainer = document.getElementById('messages-container');
             const usersContainer = document.getElementById('users-container');
             if (messagesContainer) messagesContainer.innerHTML = '';
             if (usersContainer) usersContainer.innerHTML = '';
-            
+
             this.sidebarVisible = !this.isMobile;
             const sidebar = document.getElementById('sidebar');
             if (sidebar) {
@@ -1260,45 +1081,82 @@ class ChatApp {
         }
     }
 
-    scrollToBottom(instant = false) {
-        const container = document.getElementById('chat-container');
-        if (container) {
-            setTimeout(() => {
-                try {
-                    if (instant) {
-                        container.scrollTop = container.scrollHeight;
-                    } else {
-                        container.scrollTo({
-                            top: container.scrollHeight,
-                            behavior: 'smooth'
-                        });
-                    }
-                    
-                    if (this.scrollButton) {
-                        if (this.scrollButton) this.scrollButton.classList.remove('visible');
-                    }
-                } catch (error) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }, 50);
-        }
-    }
-
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
+    
+    /* === Загрузка листа персонажа === */
+    async handleSheetUpload(file) {
+        try {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                // 1) Отправляем изображение на сервер
+                const res = await fetch('/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file: e.target.result,
+                        filename: file.name || 'character-sheet.png',
+                        characterName: this.currentUser?.name || ''
+                    })
+                });
+                const result = await res.json();
+
+                // 2) Обновляем UI модалки
+                const sheetUrl = result.url;
+                const sheetImg = document.getElementById('profile-modal-sheet');
+                const sheetEmpty = document.getElementById('profile-modal-sheet-empty');
+                const sheetOpen = document.getElementById('sheet-open-btn');
+                if (sheetImg){ sheetImg.src = sheetUrl; sheetImg.classList.remove('hidden'); }
+                if (sheetEmpty){ sheetEmpty.classList.add('hidden'); }
+                if (sheetOpen){ sheetOpen.href = sheetUrl; sheetOpen.classList.remove('hidden'); }
+
+                // 3) Пытаемся сохранить ссылку в карточке персонажа (если бэк поддерживает)
+                try {
+                    await fetch(`/character/${encodeURIComponent(this.currentUser.name)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            avatar: this.currentUser.avatar,
+                            description: this.currentUser.description,
+                            sheet: sheetUrl
+                        })
+                    });
+                } catch(_) {}
+
+                // 4) Локально положим в currentUser и при необходимости оповестим сервер/лист пользователей
+                this.currentUser.sheet = sheetUrl;
+                localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
+                if (this.socket) {
+                    this.socket.emit('update-profile', {
+                        name: this.currentUser.name,
+                        avatar: this.currentUser.avatar,
+                        description: this.currentUser.description,
+                        sheet: sheetUrl
+                    });
+                }
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            alert('Ошибка при загрузке листа персонажа');
+        } finally {
+            // очистим инпут, чтобы можно было выбрать тот же файл ещё раз
+            const input = document.getElementById('sheet-file-input');
+            if (input) input.value = '';
+        }
+    }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  const sidebar = document.getElementById("sidebar");
-  const btn = document.getElementById("floating-menu-btn");
-  if (btn && sidebar) {
-    btn.addEventListener("click", () => {
-      sidebar.classList.toggle("active");
-    });
-  }
+    const sidebar = document.getElementById("sidebar");
+    const btn = document.getElementById("floating-menu-btn");
+    if (btn && sidebar) {
+        btn.addEventListener("click", () => {
+            sidebar.classList.toggle("active");
+        });
+    }
 });
 
 window.chatApp = null;
@@ -1307,4 +1165,5 @@ document.addEventListener('DOMContentLoaded', () => {
     window.chatApp = new ChatApp();
 });
 
-document.addEventListener('touchstart', function() {}, {passive: true});
+// пассивный обработчик для iOS Safari оптимизаций
+document.addEventListener('touchstart', function(){}, {passive: true});
