@@ -10,6 +10,8 @@ class ChatApp {
         this.isConnected = false;
         this.eventListeners = new Map();
         this.scrollButton = null;
+        this.charDescUploadButton = null;
+        this.charDescInput = null;
         this.isStoryteller = false;
         this.messageSender = 'self';
         this.customSenderName = '';
@@ -21,6 +23,7 @@ class ChatApp {
         this.checkExistingSession();
         this.setupGlobalEventListeners();
         this.createScrollButton();
+        this.defineCharacterDescriptionUploadButton();
     }
 
     setupGlobalEventListeners() {
@@ -45,6 +48,17 @@ class ChatApp {
                 }
             }
         });
+    }
+
+    defineCharacterDescriptionUploadButton() {
+        this.charDescUploadButton = document.getElementById('characterDescriptionUploadButton')
+        this.charDescInput = document.getElementById('characterDescriptionFile')
+        this.charDescUploadButton.addEventListener('click', () => {
+            this.charDescInput.click()
+        });
+        this.charDescInput.addEventListener('change', (event) => {
+            this.handleFileUpload(event.target.files[0], true)
+        })
     }
 
     createScrollButton() {
@@ -124,7 +138,7 @@ class ChatApp {
         chatContainer.style.height = 'calc(100vh - 140px)';
         chatContainer.style.overflowY = 'auto';
         chatContainer.style.webkitOverflowScrolling = 'touch';
-        
+
         chatContainer.addEventListener('scroll', () => {
             this.handleChatScroll();
         }, { passive: true });
@@ -135,14 +149,6 @@ class ChatApp {
         if (!container || !this.scrollButton) return;
         const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
         this.scrollButton.style.display = distance > 100 ? 'flex' : 'none';
-    }
-
-    setupChatContainer() {
-        const chatContainer = document.getElementById('chat-container');
-        if (!chatContainer) return;
-        chatContainer.style.overflowY = 'auto';
-        chatContainer.style.webkitOverflowScrolling = 'touch';
-        chatContainer.addEventListener('scroll', () => this.handleChatScroll(), { passive: true });
     }
 
     setupEventListeners() {
@@ -201,8 +207,8 @@ class ChatApp {
         };
 
         Object.entries(chatHandlers).forEach(([id, handler]) => {
-            const eventType = id === 'message-input' ? 'keypress' : 
-                            id === 'message-sender' ? 'change' : 'click';
+            const eventType = id === 'message-input' ? 'keypress' :
+                id === 'message-sender' ? 'change' : 'click';
             this.addChatEventListener(id, eventType, handler);
         });
 
@@ -326,7 +332,7 @@ class ChatApp {
         let characterData = await this.loadCharacter(name);
         let avatarUrl = characterData?.avatar || '/uploads/default-avatar.png';
         let finalDescription = characterData?.description || description;
-        
+
         if (this.avatarBase64) {
             avatarUrl = await this.uploadAvatar(name);
         }
@@ -339,6 +345,7 @@ class ChatApp {
             name,
             avatar: avatarUrl,
             description: finalDescription,
+            descriptionImage: characterData.descriptionImage,
             isStoryteller: name === 'Рассказчик'
         };
 
@@ -409,7 +416,7 @@ class ChatApp {
         this.socket.on('connect', () => {
             this.isConnected = true;
             this.socket.emit('user-join', this.currentUser);
-            
+
             if (this.currentUser.isStoryteller) {
                 this.showStorytellerControls();
                 // Инициализируем поле как disabled
@@ -471,7 +478,7 @@ class ChatApp {
     handleSenderChange(senderType) {
         this.messageSender = senderType;
         const customSender = document.getElementById('custom-sender');
-        
+
         if (senderType === 'other') {
             customSender.disabled = false;
             customSender.placeholder = "Введите имя отправителя...";
@@ -481,7 +488,7 @@ class ChatApp {
             customSender.value = '';
             customSender.placeholder = "Выберите 'От другого имени'";
         }
-        
+
         this.updateMessageInputPlaceholder();
     }
 
@@ -510,7 +517,7 @@ class ChatApp {
         if (file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                document.getElementById('avatar-preview').innerHTML = 
+                document.getElementById('avatar-preview').innerHTML =
                     `<img src="${e.target.result}" alt="Preview">`;
                 this.avatarBase64 = e.target.result;
             };
@@ -518,7 +525,13 @@ class ChatApp {
         }
     }
 
-    async handleFileUpload(file) {
+    handleCharacterDescriptionFileUpload() {
+        const fileInput = document.getElementById('#characterDescriptionFile')
+        console.log(fileInput);
+
+    }
+
+    async handleFileUpload(file, isCharDesc = false) {
         if (!file) return;
 
         try {
@@ -533,12 +546,18 @@ class ChatApp {
                     })
                 });
                 const result = await response.json();
-                
-                this.socket.emit('send-file', {
-                    filename: result.filename,
-                    originalName: result.originalName,
-                    url: result.url
-                });
+                if (isCharDesc) {
+                    this.currentUser.descriptionImage = result.url
+                    console.log(this.currentUser);
+
+                    this.socket.emit('update-profile', this.currentUser);
+                } else {
+                    this.socket.emit('send-file', {
+                        filename: result.filename,
+                        originalName: result.originalName,
+                        url: result.url
+                    });
+                }
             };
             reader.readAsDataURL(file);
         } catch (error) {
@@ -554,31 +573,31 @@ class ChatApp {
 
         const input = document.getElementById('message-input');
         const text = input.value.trim();
-        
+
         if (text) {
             // Валидация для отправки от другого имени
             if (this.messageSender === 'other') {
                 const customSender = document.getElementById('custom-sender');
                 const senderName = customSender.value.trim();
-                
+
                 if (!senderName) {
                     alert('Пожалуйста, введите имя отправителя');
                     customSender.focus();
                     return;
                 }
-                
+
                 this.customSenderName = senderName;
             }
-            
+
             const messageData = {
                 text: text,
                 senderType: this.messageSender,
                 customSender: this.customSenderName
             };
-            
+
             this.socket.emit('send-message', messageData);
             input.value = '';
-            
+
             if (this.isMobile) {
                 input.blur();
                 setTimeout(() => this.scrollToBottom(true), 100);
@@ -589,7 +608,7 @@ class ChatApp {
     rollDice() {
         const diceCount = prompt('Введите количество кубиков d10 (1-15):', '5');
         const count = parseInt(diceCount);
-        
+
         if (count >= 1 && count <= 15) {
             this.socket.emit('roll-dice', count);
         } else if (diceCount !== null) {
@@ -624,7 +643,7 @@ class ChatApp {
         if (this.isDefaultAvatar(url)) {
             const sizeClass =
                 context === 'message' ? 'avatar-initials--sm' :
-                context === 'userlist' ? 'avatar-initials--md' :
+                    context === 'userlist' ? 'avatar-initials--md' :
                 /* profile / default */   'avatar-initials--lg';
 
             // ВАЖНО: добавляем user-avatar, чтобы сработали размеры в CSS контейнеров
@@ -636,13 +655,14 @@ class ChatApp {
         const extra =
             context === 'message' ? 'message-avatar' : '';
         return `<img src="${url}" alt="${name}" class="user-avatar ${extra}">`;
-    } 
+    }
 
     showUserProfile(user) {
         // 1) Берём аватар модалки по id, а не из несуществующей переменной
         const profileAvatar = document.getElementById('profile-modal-avatar');
         const nameEl = document.getElementById('profile-modal-name');
         const descEl = document.getElementById('profile-modal-description');
+        const descImageEl = document.getElementById('profile-modal-description-image');
         const storytellerBadge = document.getElementById('profile-modal-storyteller');
 
         // Защита от отсутствующих нод — чтобы не падало, а просто молча не открылось
@@ -664,6 +684,7 @@ class ChatApp {
         // 3) Заполняем остальное
         nameEl.textContent = user.name;
         descEl.textContent = user.description || 'Описание отсутствует';
+        descImageEl.src = user.descriptionImage
         storytellerBadge.classList[user.isStoryteller ? 'remove' : 'add']('hidden');
 
         // 4) Показываем модалку и прячем сайдбар на мобиле
@@ -680,9 +701,9 @@ class ChatApp {
         if (newName === null) return;
 
         const newDescription = prompt('Новое описание:', this.currentUser.description);
-        
+
         let newAvatar = this.currentUser.avatar;
-        
+
         if (this.avatarBase64) {
             newAvatar = await this.uploadAvatar(newName);
         }
@@ -693,14 +714,15 @@ class ChatApp {
         this.currentUser.description = newDescription || '';
         this.currentUser.avatar = newAvatar;
         this.currentUser.isStoryteller = newName === 'Рассказчик';
-        
+
         localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
         this.updateUserProfile();
-        
+
         this.socket.emit('update-profile', {
             name: newName,
             avatar: newAvatar,
-            description: newDescription
+            description: newDescription,
+            descriptionImage: this.currentUser.descriptionImage,
         });
 
         this.avatarBase64 = null;
@@ -710,7 +732,7 @@ class ChatApp {
     displayChatHistory(history) {
         const container = document.getElementById('messages-container');
         if (!container) return;
-        
+
         container.innerHTML = '';
         history.forEach(message => this.displayMessage(message));
         setTimeout(() => this.scrollToBottom(true), 100);
@@ -723,9 +745,9 @@ class ChatApp {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${this.getMessageClasses(message)}`;
         messageElement.id = `message-${message.id}`;
-        
+
         const time = new Date(message.timestamp).toLocaleTimeString();
-        
+
         if (message.type === 'file') {
             messageElement.innerHTML = this.createFileMessageHTML(message, time);
         } else if (message.type === 'dice') {
@@ -733,7 +755,7 @@ class ChatApp {
         } else {
             messageElement.innerHTML = this.createTextMessageHTML(message, time);
         }
-        
+
         container.appendChild(messageElement);
     }
 
@@ -748,7 +770,7 @@ class ChatApp {
 
     createFileMessageHTML(message, time) {
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
-        
+
         // Для сообщений от другого имени убираем аватарку
         if (message.senderType === 'other') {
             return `
@@ -764,7 +786,7 @@ class ChatApp {
                 </div>
             `;
         }
-        
+
         // Обычное сообщение с аватаркой
         return `
             ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
@@ -784,9 +806,9 @@ class ChatApp {
     createDiceMessageHTML(message, time) {
         const roll = message.rollResult;
         const successClass = roll.totalSuccesses >= 5 ? 'dice-success' : roll.totalSuccesses >= 3 ? 'dice-good' : 'dice-fail';
-        
+
         const displayName = message.senderType === 'other' ? message.customSender : message.user.name;
-        
+
         // Для сообщений от другого имени убираем аватарку
         if (message.senderType === 'other') {
             return `
@@ -820,7 +842,7 @@ class ChatApp {
                 </div>
             `;
         }
-        
+
         // Обычное сообщение с аватаркой
         return `
             ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
@@ -856,7 +878,7 @@ class ChatApp {
     }
 
 
-    
+
     createTextMessageHTML(message, time) {
         const editedInfo = message.edited ? `<span class="edited-info">(ред.)</span>` : '';
         const safeHtml = this.escapeHtml(message.text).replace(/\n/g, '<br>');
@@ -905,18 +927,18 @@ class ChatApp {
                 <div class="message-text">${safeHtml}</div>
             </div>
             `;
-        }
+    }
 
     updateMessage(message) {
         const messageElement = document.getElementById(`message-${message.id}`);
         if (messageElement) {
             const textElement = messageElement.querySelector('.message-text');
             const timeElement = messageElement.querySelector('.message-time');
-            
+
             if (textElement) {
                 textElement.textContent = message.text;
             }
-            
+
             if (timeElement && message.edited) {
                 const editedTime = new Date(message.editTimestamp).toLocaleTimeString();
                 timeElement.innerHTML = `${timeElement.textContent.split('(')[0]} (ред. ${message.editedBy} в ${editedTime})`;
@@ -961,7 +983,7 @@ class ChatApp {
     updateUsersList(users) {
         const container = document.getElementById('users-container');
         if (!container) return;
-        
+
         container.innerHTML = '';
         users.forEach(user => this.addUserToList(user));
     }
@@ -980,7 +1002,7 @@ class ChatApp {
         const userElement = document.createElement('div');
         userElement.className = 'user-item';
         userElement.id = `user-${user.id}`;
-        
+
         const avatarHTML = this.createAvatarHTML(user.name, user.avatar, 'userlist-avatar');
 
         userElement.innerHTML = `
@@ -995,11 +1017,11 @@ class ChatApp {
                 <div class="user-status">В сети</div>
             </div>
         `;
-        
+
         userElement.addEventListener('click', () => {
             this.showUserProfile(user);
         });
-        
+
         container.appendChild(userElement);
     }
 
@@ -1026,7 +1048,7 @@ class ChatApp {
                     <div class="user-status">В сети</div>
                 </div>
             `;
-            
+
             userElement.addEventListener('click', () => {
                 this.showUserProfile(user);
             });
@@ -1040,41 +1062,41 @@ class ChatApp {
                 this.socket.disconnect();
                 this.socket = null;
             }
-            
+
             localStorage.removeItem('chatUser');
             this.currentUser = null;
             this.isConnected = false;
             this.isStoryteller = false;
             this.messageSender = 'self';
             this.customSenderName = '';
-            
+
             this.removeEventListeners();
-            
+
             document.getElementById('chat-interface').classList.add('hidden');
             document.getElementById('login-modal').classList.remove('hidden');
-            
+
             const controls = document.getElementById('storyteller-controls');
             if (controls) controls.classList.add('hidden');
-            
+
             const customSender = document.getElementById('custom-sender');
             if (customSender) {
                 customSender.value = '';
                 customSender.disabled = true;
                 customSender.placeholder = "Выберите 'От другого имени'";
             }
-            
+
             const senderSelect = document.getElementById('message-sender');
             if (senderSelect) senderSelect.value = 'self';
-            
+
             document.getElementById('login-form').reset();
             document.getElementById('avatar-preview').innerHTML = '';
             this.avatarBase64 = null;
-            
+
             const messagesContainer = document.getElementById('messages-container');
             const usersContainer = document.getElementById('users-container');
             if (messagesContainer) messagesContainer.innerHTML = '';
             if (usersContainer) usersContainer.innerHTML = '';
-            
+
             this.sidebarVisible = !this.isMobile;
             const sidebar = document.getElementById('sidebar');
             if (sidebar) {
@@ -1099,7 +1121,7 @@ class ChatApp {
                             behavior: 'smooth'
                         });
                     }
-                    
+
                     if (this.scrollButton) {
                         this.scrollButton.style.display = 'none';
                     }
@@ -1118,13 +1140,13 @@ class ChatApp {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  const sidebar = document.getElementById("sidebar");
-  const btn = document.getElementById("floating-menu-btn");
-  if (btn && sidebar) {
-    btn.addEventListener("click", () => {
-      sidebar.classList.toggle("active");
-    });
-  }
+    const sidebar = document.getElementById("sidebar");
+    const btn = document.getElementById("floating-menu-btn");
+    if (btn && sidebar) {
+        btn.addEventListener("click", () => {
+            sidebar.classList.toggle("active");
+        });
+    }
 });
 
 window.chatApp = null;
@@ -1133,4 +1155,4 @@ document.addEventListener('DOMContentLoaded', () => {
     window.chatApp = new ChatApp();
 });
 
-document.addEventListener('touchstart', function() {}, {passive: true});
+document.addEventListener('touchstart', function () { }, { passive: true });

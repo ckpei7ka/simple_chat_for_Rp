@@ -105,16 +105,18 @@
         <div id="user-profile-modal" class="modal hidden">
             <div class="profile-modal-content cod-modal">
                 <div class="cod-modal-header">
-                    <div class="cod-logo">🌙</div>
+                    <div class="cod-logo"><img id="profile-modal-avatar" src="" alt="Аватар" class="profile-modal-avatar"></div>
                     <h3>Профиль Обитателя Тени</h3>
                 </div>
-                <img id="profile-modal-avatar" src="" alt="Аватар" class="profile-modal-avatar">
                 <h2 id="profile-modal-name" class="profile-modal-name"></h2>
+                <img id="profile-modal-description-image" src="" alt="Описание персонажа" style="width: 600px; height: 800px;">
                 <div id="profile-modal-storyteller" class="profile-modal-storyteller hidden">Рассказчик</div>
                 <div class="profile-section">
                     <h4>Описание:</h4>
                     <p id="profile-modal-description" class="profile-modal-description"></p>
                 </div>
+                <input type="file" id="characterDescriptionFile" hidden>
+                <button id="characterDescriptionUploadButton" class="cod-btn-secondary">Загрузить лист персонажа</button>
                 <button id="profile-modal-close" class="cod-btn-secondary">Закрыть</button>
             </div>
         </div>

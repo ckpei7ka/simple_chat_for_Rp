@@ -44,7 +44,7 @@ const fileUtils = {
       return defaultValue;
     }
   },
-  
+
   saveJSON: (filePath, data) => {
     try {
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
@@ -67,15 +67,15 @@ app.post('/upload', (req, res) => {
     const base64Data = file.replace(/^data:([A-Za-z-+/]+);base64,/, '');
     const safeFilename = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const filePath = path.join(__dirname, 'uploads', safeFilename);
-    
+
     fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
-    
+
     if (characterName && filename.includes('avatar')) {
       if (!characters[characterName]) characters[characterName] = {};
       characters[characterName].avatar = `/uploads/${safeFilename}`;
       fileUtils.saveJSON(CHARACTERS_FILE, characters);
     }
-    
+
     res.json({ filename: safeFilename, url: `/uploads/${safeFilename}` });
   } catch (error) {
     console.error('Upload error:', error);
@@ -92,11 +92,11 @@ app.get('/character/:name', (req, res) => {
 app.post('/character/:name', (req, res) => {
   const { avatar, description } = req.body;
   const characterName = req.params.name;
-  
+
   if (!characters[characterName]) characters[characterName] = {};
   if (avatar) characters[characterName].avatar = avatar;
   if (description) characters[characterName].description = description;
-  
+
   fileUtils.saveJSON(CHARACTERS_FILE, characters);
   res.json({ success: true, character: characters[characterName] });
 });
@@ -104,7 +104,7 @@ app.post('/character/:name', (req, res) => {
 // Логика броска кубиков
 function rollDice(numberOfDice) {
   const results = Array.from({ length: numberOfDice }, () => Math.floor(Math.random() * 10) + 1);
-  
+
   let initialSuccesses = results.filter(roll => roll >= 8).length;
   let tens = results.filter(roll => roll === 10).length;
 
@@ -137,7 +137,7 @@ io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   const getUser = () => users.get(socket.id);
-  
+
   const createMessage = (type, data = {}) => {
     const user = getUser();
     const messageData = {
@@ -176,7 +176,7 @@ io.on('connection', (socket) => {
   socket.on('user-join', (userData) => {
     const characterName = userData.name;
     let character = characters[characterName];
-    
+
     if (!character) {
       character = { avatar: '/uploads/default-avatar.png', description: '' };
       characters[characterName] = character;
@@ -188,9 +188,10 @@ io.on('connection', (socket) => {
       name: characterName,
       avatar: character.avatar,
       description: character.description,
+      descriptionImage: character.descriptionImage,
       isStoryteller: characterName === 'Рассказчик'
     };
-    
+
     users.set(socket.id, user);
     socket.emit('chat-history', chatHistory);
     socket.emit('users-list', Array.from(users.values()));
@@ -229,7 +230,7 @@ io.on('connection', (socket) => {
       editTimestamp: new Date().toISOString(),
       editedBy: user.name
     };
-    
+
     fileUtils.saveJSON(CHAT_HISTORY_FILE, chatHistory);
     io.emit('message-edited', chatHistory[messageIndex]);
   });
@@ -255,10 +256,12 @@ io.on('connection', (socket) => {
     const oldName = user.name;
     const newName = profileData.name || oldName;
     const isNameChanged = oldName !== newName;
+    console.log(profileData);
 
     characters[newName] = {
       avatar: profileData.avatar || user.avatar,
-      description: profileData.description || user.description
+      description: profileData.description || user.description,
+      descriptionImage: profileData.descriptionImage || user.descriptionImage
     };
 
     if (isNameChanged && oldName !== 'Рассказчик' && characters[oldName]) {
@@ -271,6 +274,7 @@ io.on('connection', (socket) => {
       name: newName,
       avatar: characters[newName].avatar,
       description: characters[newName].description,
+      descriptionImage: characters[newName].descriptionImage,
       isStoryteller: newName === 'Рассказчик'
     });
 
