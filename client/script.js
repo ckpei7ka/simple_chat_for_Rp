@@ -1086,7 +1086,7 @@ class ChatApp {
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     /* === Загрузка листа персонажа === */
     async handleSheetUpload(file) {
         try {
@@ -1151,11 +1151,18 @@ class ChatApp {
 
 window.addEventListener("DOMContentLoaded", () => {
     const sidebar = document.getElementById("sidebar");
-    const btn = document.getElementById("floating-menu-btn");
-    if (btn && sidebar) {
-        btn.addEventListener("click", () => {
+    const btnFloating = document.getElementById("floating-menu-btn");
+    if (btnFloating && sidebar) {
+        btnFloating.addEventListener("click", () => {
             sidebar.classList.toggle("active");
         });
+    }
+
+    /* === ВАЖНО: вынесем mobile-menu-btn в <body>, чтобы исключить влияние родительских
+       stacking context/overflow/transform и гарантировать кликабельность поверх сайдбара */
+    const mobileBtn = document.getElementById("mobile-menu-btn");
+    if (mobileBtn && mobileBtn.parentElement !== document.body) {
+        document.body.appendChild(mobileBtn);
     }
 });
 

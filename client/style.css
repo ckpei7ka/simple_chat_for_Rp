@@ -204,12 +204,34 @@ body {
 
 /* === Поверх всех: mobile-menu-btn === */
 /* Делаем кнопку меню абсолютно верхним слоем, вне потока, чтобы ничто не перекрывало */
+#mobile-menu-btn,
 .mobile-menu-btn{
-  position:fixed !important;
-  top:3rem; left:.75rem;
-  z-index:5001 !important; /* выше модалок (4000) и сайдбара (3000) */
-  box-shadow:var(--shadow);
+  position: fixed !important;
+  top: 3rem;
+  left: .75rem;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  background: var(--cod-surface-light);
+  color: var(--cod-text-primary);
+  border: 1px solid var(--cod-border);
+  box-shadow: var(--shadow-large);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* ВЫШЕ активного сайдбара (z-index: 3000) и модалок (4000) */
+  z-index: 100000 !important;
+  pointer-events: auto !important;
+  transition: var(--tr);
 }
+#mobile-menu-btn:hover {
+  background: var(--cod-surface-lighter);
+  color: var(--cod-accent-gold);
+}
+
+
 @media (min-width:769px){
   .mobile-menu-btn{ display:none !important; }
 }
