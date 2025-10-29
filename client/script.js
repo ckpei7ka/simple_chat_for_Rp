@@ -45,6 +45,16 @@ class ChatApp {
                 }
             }
         });
+
+        this.addEventListener('sheet-upload-btn', 'click', () => {
+            const inp = document.getElementById('sheet-file-input');
+            if (inp) inp.click();
+        });
+
+        this.addEventListener('sheet-file-input', 'change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) this.handleSheetUpload(file);
+        });
     }
 
     createScrollButton() {
@@ -202,7 +212,7 @@ class ChatApp {
 
         Object.entries(chatHandlers).forEach(([id, handler]) => {
             const eventType = id === 'message-input' ? 'keypress' : 
-                            id === 'message-sender' ? 'change' : 'click';
+                id === 'message-sender' ? 'change' : 'click';
             this.addChatEventListener(id, eventType, handler);
         });
 
@@ -326,7 +336,7 @@ class ChatApp {
         let characterData = await this.loadCharacter(name);
         let avatarUrl = characterData?.avatar || '/uploads/default-avatar.png';
         let finalDescription = characterData?.description || description;
-        
+        let sheetUrl = characterData?.sheet || '';
         if (this.avatarBase64) {
             avatarUrl = await this.uploadAvatar(name);
         }
@@ -339,6 +349,7 @@ class ChatApp {
             name,
             avatar: avatarUrl,
             description: finalDescription,
+            sheet: sheetUrl,
             isStoryteller: name === 'Рассказчик'
         };
 
@@ -518,6 +529,83 @@ class ChatApp {
         }
     }
 
+    async handleSheetUpload(file) {
+        if (!file) return;
+        if (!this.currentUser?.name) {
+            alert('Сессия пользователя не найдена');
+            return;
+        }
+
+        // Предупреждение при перезаписи
+        if (this.currentUser.sheet) {
+            const ok = confirm('Лист уже загружен. Перезаписать?');
+            if (!ok) return;
+        }
+
+        try {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                file: e.target.result,
+                filename: 'sheet.png',            // ключевое слово "sheet" — сервер поймёт
+                characterName: this.currentUser.name
+                })
+            });
+            const result = await response.json();
+
+            if (result?.url) {
+                // Локально обновим currentUser и localStorage
+                this.currentUser.sheet = result.url;
+                localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
+
+                // На всякий — пропишем и в персонажа на сервере (не обязательно, но полезно)
+                await fetch(`/character/${encodeURIComponent(this.currentUser.name)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sheet: result.url })
+                });
+
+                // ⬇️ Перечитаем профиль с сервера, чтобы избежать расхождений
+                const fresh = await this.loadCharacter(this.currentUser.name);
+                if (fresh && fresh.sheet) {
+                    this.currentUser.sheet = fresh.sheet;
+                    localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
+                }
+
+                // Обновим модалку "на лету"
+                const sheetImg = document.getElementById('profile-modal-sheet');
+                const sheetEmpty = document.getElementById('profile-modal-sheet-empty');
+                const openBtn = document.getElementById('sheet-open-btn');
+
+                if (sheetImg) {
+                sheetImg.src = result.url;
+                sheetImg.classList.remove('hidden');
+                }
+                if (sheetEmpty) sheetEmpty.classList.add('hidden');
+                if (openBtn) {
+                openBtn.href = result.url;
+                openBtn.classList.remove('hidden');
+                }
+
+                alert('Лист персонажа обновлён');
+            } else {
+                alert('Не удалось загрузить лист персонажа');
+            }
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error(err);
+            alert('Ошибка при загрузке листа персонажа');
+        } finally {
+            // Сброс input, чтобы при выборе того же файла событие сработало снова
+            const inp = document.getElementById('sheet-file-input');
+            if (inp) inp.value = '';
+        }
+    }
+
     async handleFileUpload(file) {
         if (!file) return;
 
@@ -638,8 +726,30 @@ class ChatApp {
         return `<img src="${url}" alt="${name}" class="user-avatar ${extra}">`;
     } 
 
-    showUserProfile(user) {
-        // 1) Берём аватар модалки по id, а не из несуществующей переменной
+    async showUserProfile(user) {
+        // Перед показом модалки перечитаем карточку с сервера,
+        // чтобы гарантированно получить актуальный sheet/описание/аватар
+        let profile = user;
+        try {
+            const fresh = await this.loadCharacter(user.name);
+            if (fresh) {
+                profile = {
+                    ...user,
+                    avatar: fresh.avatar || user.avatar,
+                    description: fresh.description ?? user.description,
+                    sheet: fresh.sheet || user.sheet
+                };
+                // Если это наш текущий пользователь — синхронизируем localStorage
+                if (this.currentUser && this.currentUser.name === user.name) {
+                    this.currentUser.avatar = profile.avatar;
+                    this.currentUser.description = profile.description || '';
+                    this.currentUser.sheet = profile.sheet || '';
+                    localStorage.setItem('chatUser', JSON.stringify(this.currentUser));
+                }
+            }
+        } catch (e) { /* no-op */ }
+
+        // 1) Берём аватар модалки по id
         const profileAvatar = document.getElementById('profile-modal-avatar');
         const nameEl = document.getElementById('profile-modal-name');
         const descEl = document.getElementById('profile-modal-description');
@@ -652,7 +762,7 @@ class ChatApp {
         }
 
         // 2) Собираем HTML для аватара и заменяем узел в модалке
-        const html = this.createAvatarHTML(user?.name, user?.avatar, 'user-avatar');
+        const html = this.createAvatarHTML(profile?.name, profile?.avatar, 'user-avatar');
         const tmp = document.createElement('div');
         tmp.innerHTML = html;
         const node = tmp.firstChild;
@@ -662,9 +772,25 @@ class ChatApp {
         parent.replaceChild(node, profileAvatar);
 
         // 3) Заполняем остальное
-        nameEl.textContent = user.name;
-        descEl.textContent = user.description || 'Описание отсутствует';
-        storytellerBadge.classList[user.isStoryteller ? 'remove' : 'add']('hidden');
+        nameEl.textContent = profile.name;
+        descEl.textContent = profile.description || 'Описание отсутствует';
+        storytellerBadge.classList[profile.isStoryteller ? 'remove' : 'add']('hidden');
+
+        // 3.bis) Лист персонажа — проставляем превью и ссылку
+        const sheetImg = document.getElementById('profile-modal-sheet');
+        const sheetEmpty = document.getElementById('profile-modal-sheet-empty');
+        const openBtn = document.getElementById('sheet-open-btn');
+        const sheetUrl = profile.sheet || '';
+
+        if (sheetUrl) {
+            if (sheetImg) { sheetImg.src = sheetUrl; sheetImg.classList.remove('hidden'); }
+            if (sheetEmpty) sheetEmpty.classList.add('hidden');
+            if (openBtn) { openBtn.href = sheetUrl; openBtn.classList.remove('hidden'); }
+        } else {
+            if (sheetImg) { sheetImg.src = ''; sheetImg.classList.add('hidden'); }
+            if (sheetEmpty) sheetEmpty.classList.remove('hidden');
+            if (openBtn) openBtn.classList.add('hidden');
+        }
 
         // 4) Показываем модалку и прячем сайдбар на мобиле
         document.getElementById('user-profile-modal').classList.remove('hidden');

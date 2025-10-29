@@ -112,8 +112,18 @@
                 <h2 id="profile-modal-name" class="profile-modal-name"></h2>
                 <div id="profile-modal-storyteller" class="profile-modal-storyteller hidden">Рассказчик</div>
                 <div class="profile-section">
+                    <h4>Лист персонажа:</h4>
+                    <img id="profile-modal-sheet" class="profile-modal-sheet hidden" src="" alt="Лист персонажа">
+                      <div id="profile-modal-sheet-empty" class="profile-modal-sheet-empty">
+                            Лист персонажа пока не загружен.
+                        </div>
                     <h4>Описание:</h4>
                     <p id="profile-modal-description" class="profile-modal-description"></p>
+                    <div class="sheet-actions">
+                        <input type="file" id="sheet-file-input" accept="image/*" class="hidden">
+                        <button id="sheet-upload-btn" class="cod-btn-secondary">Загрузить / Перезаписать</button>
+                        <a id="sheet-open-btn" class="cod-btn-secondary hidden" target="_blank" rel="noopener">Открыть в полном размере</a>
+                    </div>
                 </div>
                 <button id="profile-modal-close" class="cod-btn-secondary">Закрыть</button>
             </div>

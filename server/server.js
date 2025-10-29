@@ -70,12 +70,20 @@ app.post('/upload', (req, res) => {
     
     fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
     
-    if (characterName && filename.includes('avatar')) {
+    // Привязка файла к персонажу: поддерживаем avatar и sheet
+    if (characterName) {
       if (!characters[characterName]) characters[characterName] = {};
-      characters[characterName].avatar = `/uploads/${safeFilename}`;
+
+      if (filename.toLowerCase().includes('avatar')) {
+        characters[characterName].avatar = `/uploads/${safeFilename}`;
+      }
+      if (filename.toLowerCase().includes('sheet')) {
+        characters[characterName].sheet = `/uploads/${safeFilename}`;
+      }
+
       fileUtils.saveJSON(CHARACTERS_FILE, characters);
     }
-    
+
     res.json({ filename: safeFilename, url: `/uploads/${safeFilename}` });
   } catch (error) {
     console.error('Upload error:', error);
@@ -90,12 +98,13 @@ app.get('/character/:name', (req, res) => {
 });
 
 app.post('/character/:name', (req, res) => {
-  const { avatar, description } = req.body;
+  const { avatar, description, sheet } = req.body;
   const characterName = req.params.name;
   
   if (!characters[characterName]) characters[characterName] = {};
   if (avatar) characters[characterName].avatar = avatar;
-  if (description) characters[characterName].description = description;
+  if (description !== undefined) characters[characterName].description = description;
+  if (sheet) characters[characterName].sheet = sheet;
   
   fileUtils.saveJSON(CHARACTERS_FILE, characters);
   res.json({ success: true, character: characters[characterName] });
@@ -178,7 +187,7 @@ io.on('connection', (socket) => {
     let character = characters[characterName];
     
     if (!character) {
-      character = { avatar: '/uploads/default-avatar.png', description: '' };
+      character = { avatar: '/uploads/default-avatar.png', description: '', sheet: '' };
       characters[characterName] = character;
       fileUtils.saveJSON(CHARACTERS_FILE, characters);
     }
@@ -188,6 +197,7 @@ io.on('connection', (socket) => {
       name: characterName,
       avatar: character.avatar,
       description: character.description,
+      sheet: character.sheet || '',
       isStoryteller: characterName === 'Рассказчик'
     };
     
@@ -256,9 +266,19 @@ io.on('connection', (socket) => {
     const newName = profileData.name || oldName;
     const isNameChanged = oldName !== newName;
 
+    // База для слияния:
+    // если имя меняется — берем данные из старой записи; иначе — из текущей.
+    const base = isNameChanged
+      ? (characters[oldName] || {})
+      : (characters[newName] || {});
+
+    // Аккуратно обновляем только присланные поля и сохраняем sheet
     characters[newName] = {
-      avatar: profileData.avatar || user.avatar,
-      description: profileData.description || user.description
+      avatar: profileData.avatar || base.avatar || user.avatar || '/uploads/default-avatar.png',
+      description: (profileData.description !== undefined)
+        ? profileData.description
+        : (base.description !== undefined ? base.description : user.description || ''),
+      sheet: profileData.sheet || base.sheet || ''
     };
 
     if (isNameChanged && oldName !== 'Рассказчик' && characters[oldName]) {
@@ -271,6 +291,8 @@ io.on('connection', (socket) => {
       name: newName,
       avatar: characters[newName].avatar,
       description: characters[newName].description,
+      sheet: characters[newName].sheet || '',
+      // sheet хранится в characters; при необходимости клиент может перечитать профиль по REST
       isStoryteller: newName === 'Рассказчик'
     });
 

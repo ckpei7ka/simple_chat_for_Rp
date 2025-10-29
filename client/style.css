@@ -1004,3 +1004,81 @@ body {
   border-color: var(--cod-accent-gold);
   box-shadow: 0 4px 8px rgba(0,0,0,.3);
 }
+
+.profile-modal-sheet {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  background: var(--cod-bg-darker);
+  border: 1px solid var(--cod-border);
+  border-radius: var(--border-radius);
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.profile-modal-sheet-empty {
+  color: var(--cod-text-muted);
+  font-style: italic;
+  padding: 0.75rem;
+  border: 1px dashed var(--cod-border);
+  border-radius: var(--border-radius);
+  background: rgba(0,0,0,0.2);
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ====== Профиль: ограничиваем модалку 80% экрана + внутренняя прокрутка ====== */
+/* Контейнер модалки профиля */
+#user-profile-modal .profile-modal-content.cod-modal {
+  /* размеры */
+  width: 80vw;
+  max-width: 1100px;
+  max-height: 80vh;
+
+  /* layout, чтобы кнопка оставалась видимой */
+  display: flex;
+  flex-direction: column;
+
+  /* когда контента много — скроллится внутри */
+  overflow: hidden;
+  padding: 1.25rem;
+}
+
+/* Прокручиваемая зона контента (лист + описание) */
+#user-profile-modal .profile-section {
+  flex: 1 1 auto;
+  min-height: 0;           /* важно для корректного overflow в flex-контейнере */
+  overflow-y: auto;        /* внутренняя прокрутка вместо раздувания окна */
+  padding-right: 0.25rem;  /* небольшой запас под скроллбар */
+}
+
+/* Кнопка закрытия — всегда «под рукой» */
+#profile-modal-close {
+  align-self: flex-end;
+  position: sticky;
+  bottom: 0;
+  margin-top: 0.75rem;
+  /* легкий фон и тень, чтобы отделить от скроллящегося контента */
+  background: var(--cod-surface);
+  box-shadow: 0 -8px 16px rgba(0,0,0,0.25);
+}
+
+/* На мобильных делаем модалку компактнее и выше */
+@media (max-width: 768px) {
+  #user-profile-modal .profile-modal-content.cod-modal {
+    width: 96vw;
+    max-width: none;
+    max-height: 90vh;
+    padding: 1rem;
+  }
+  .profile-modal-avatar {
+    width: 96px;
+    height: 96px;
+  }
+}
