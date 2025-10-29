@@ -607,23 +607,68 @@ class ChatApp {
         }
     }
 
+    isDefaultAvatar(url) {
+        // всё, что считаем "нет аватара"
+        return !url || url === '/uploads/default-avatar.png';
+    }
+
+    getInitial(name = '') {
+        const s = name.trim();
+        return s ? s[0].toUpperCase() : '?';
+    }
+
+    createAvatarHTML(name, url, context) {
+        // context: 'message' | 'userlist' | 'profile'
+        const initial = this.getInitial(name);
+
+        if (this.isDefaultAvatar(url)) {
+            const sizeClass =
+                context === 'message' ? 'avatar-initials--sm' :
+                context === 'userlist' ? 'avatar-initials--md' :
+                /* profile / default */   'avatar-initials--lg';
+
+            // ВАЖНО: добавляем user-avatar, чтобы сработали размеры в CSS контейнеров
+            return `<div class="user-avatar avatar-initials ${sizeClass}" aria-hidden="true">${initial}</div>`;
+        }
+
+        // Для изображений тоже всегда включаем user-avatar,
+        // и при необходимости — доп.класс (например, message-avatar для сообщений)
+        const extra =
+            context === 'message' ? 'message-avatar' : '';
+        return `<img src="${url}" alt="${name}" class="user-avatar ${extra}">`;
+    } 
+
     showUserProfile(user) {
-        document.getElementById('profile-modal-avatar').src = user.avatar;
-        document.getElementById('profile-modal-name').textContent = user.name;
-        document.getElementById('profile-modal-description').textContent = user.description || 'Описание отсутствует';
-        
+        // 1) Берём аватар модалки по id, а не из несуществующей переменной
+        const profileAvatar = document.getElementById('profile-modal-avatar');
+        const nameEl = document.getElementById('profile-modal-name');
+        const descEl = document.getElementById('profile-modal-description');
         const storytellerBadge = document.getElementById('profile-modal-storyteller');
-        if (user.isStoryteller) {
-            storytellerBadge.classList.remove('hidden');
-        } else {
-            storytellerBadge.classList.add('hidden');
+
+        // Защита от отсутствующих нод — чтобы не падало, а просто молча не открылось
+        if (!profileAvatar || !nameEl || !descEl || !storytellerBadge) {
+            console.warn('Profile modal elements not found');
+            return;
         }
-        
+
+        // 2) Собираем HTML для аватара и заменяем узел в модалке
+        const html = this.createAvatarHTML(user?.name, user?.avatar, 'user-avatar');
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const node = tmp.firstChild;
+        node.id = 'profile-modal-avatar';
+
+        const parent = profileAvatar.parentElement;
+        parent.replaceChild(node, profileAvatar);
+
+        // 3) Заполняем остальное
+        nameEl.textContent = user.name;
+        descEl.textContent = user.description || 'Описание отсутствует';
+        storytellerBadge.classList[user.isStoryteller ? 'remove' : 'add']('hidden');
+
+        // 4) Показываем модалку и прячем сайдбар на мобиле
         document.getElementById('user-profile-modal').classList.remove('hidden');
-        
-        if (this.isMobile) {
-            this.hideSidebar();
-        }
+        if (this.isMobile) this.hideSidebar();
     }
 
     closeUserProfile() {
@@ -722,7 +767,7 @@ class ChatApp {
         
         // Обычное сообщение с аватаркой
         return `
-            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
+            ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
@@ -778,7 +823,7 @@ class ChatApp {
         
         // Обычное сообщение с аватаркой
         return `
-            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
+            ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
@@ -850,7 +895,7 @@ class ChatApp {
 
 
         return `
-            <img src="${message.user.avatar}" alt="${displayName}" class="message-avatar">
+            ${this.createAvatarHTML(displayName, message.user.avatar, 'message-avatar')}
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-user">${displayName}</span>
@@ -897,10 +942,19 @@ class ChatApp {
     }
 
     updateUserProfile() {
-        const userAvatar = document.getElementById('user-avatar');
+        const userAvatarEl = document.getElementById('user-avatar');
         const userName = document.getElementById('user-name');
-        
-        if (userAvatar) userAvatar.src = this.currentUser.avatar;
+
+        if (userAvatarEl) {
+            const wrapper = userAvatarEl.parentElement;
+            const html = this.createAvatarHTML(this.currentUser.name, this.currentUser.avatar, 'user-avatar');
+            // Заменяем <img id="user-avatar"> на готовый HTML (сохраним id для будущих обращений)
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            const node = tmp.firstChild;
+            node.id = 'user-avatar';
+            wrapper.replaceChild(node, userAvatarEl);
+        }
         if (userName) userName.textContent = this.currentUser.name;
     }
 
@@ -927,11 +981,15 @@ class ChatApp {
         userElement.className = 'user-item';
         userElement.id = `user-${user.id}`;
         
+        const avatarHTML = this.createAvatarHTML(user.name, user.avatar, 'userlist-avatar');
+
         userElement.innerHTML = `
-            <img src="${user.avatar}" alt="${user.name}" class="user-avatar">
+            ${avatarHTML}
+            <div class="user-info">
+                <div class="user-name">${this.escapeHtml(user.name)}</div>
+            </div>
             <div class="user-info">
                 <div class="user-name">
-                    ${user.name}
                     ${user.isStoryteller ? '<span class="storyteller-badge">🎭</span>' : ''}
                 </div>
                 <div class="user-status">В сети</div>
@@ -952,9 +1010,14 @@ class ChatApp {
 
     updateUserInList(user) {
         const userElement = document.getElementById(`user-${user.id}`);
+        const avatarHTML = this.createAvatarHTML(user.name, user.avatar, 'userlist-avatar');
         if (userElement) {
             userElement.innerHTML = `
-                <img src="${user.avatar}" alt="${user.name}" class="user-avatar">
+                ${avatarHTML}
+                <div class="user-info">
+                    <div class="user-name">${this.escapeHtml(user.name)}</div>
+                    <div class="user-status">${user.isStoryteller ? 'Рассказчик' : 'В Тени'}</div>
+                </div>
                 <div class="user-info">
                     <div class="user-name">
                         ${user.name}

@@ -966,3 +966,41 @@ body {
     }
     /* (Удалены стили уменьшения #message-input и #send-btn на экстремально малых экранах для сохранения комфортного размера) */
 }
+
+
+/* === Initials avatar fallback === */
+.avatar-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-radius: 50%;
+  background: var(--cod-surface-light);
+  color: var(--cod-text-primary);
+  border: 2px solid var(--cod-border);
+  text-transform: uppercase;
+  user-select: none;
+  line-height: 1;   
+}
+
+/* размеры, согласованные с существующими img-аватарами */
+.avatar-initials--sm { /* message avatar ≈ 40x40 */
+  width: 40px; height: 40px; font-size: 0.95rem;
+  margin-right: 1rem; flex-shrink: 0;
+}
+.avatar-initials--md { /* user list ≈ 40x40 */
+  width: 40px; height: 40px; font-size: 0.95rem;
+  margin-right: 0.75rem; flex-shrink: 0;
+}
+.avatar-initials--lg { /* profile/sidebar ≈ 80x80 */
+  width: 40px; height: 40px; font-size: 2rem;
+  margin: 0 auto 1rem; 
+  border-width: 3px;
+}
+
+/* если нужно золото-кольцо как у img в профиле */
+#user-profile .avatar-initials.avatar-initials--lg,
+.profile-modal-avatar.avatar-initials--lg {
+  border-color: var(--cod-accent-gold);
+  box-shadow: 0 4px 8px rgba(0,0,0,.3);
+}

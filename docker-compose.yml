@@ -10,6 +10,7 @@ services:
     volumes:
       - chat_data:/app/server/data
       - chat_uploads:/app/server/uploads
+      - ./client:/app/client
     environment:
       - NODE_ENV=production
     restart: unless-stopped
